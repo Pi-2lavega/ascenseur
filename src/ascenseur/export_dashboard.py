@@ -220,8 +220,8 @@ def generate_dashboard_data(conn: sqlite3.Connection) -> dict:
            ORDER BY b.code, l.etage, l.numero"""
     ).fetchall()
 
-    # Surface estimée : ratio 192.5 TA ≈ 65m² (lot 28 ref)
-    ta_to_m2 = 65.0 / 192.5
+    # Surface estimée : ratio 192.5 TA ≈ 65m² (lot 28 ref), ajusté -15%
+    ta_to_m2 = 65.0 / 192.5 * 0.85
 
     argumentaire_lots = []
     for r in arg_rows:
