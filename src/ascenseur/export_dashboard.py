@@ -824,8 +824,13 @@ renderScenarioDesc();
 }});
 // Reset button
 document.getElementById('vote-reset').addEventListener('click', async () => {{
-    await fetch('/api/votes/reset', {{ method: 'POST' }}).catch(err => console.error('Erreur reset:', err));
-    votesState = JSON.parse(JSON.stringify(DATA.votes.detail));
+    try {{
+        await fetch('/api/votes/reset', {{ method: 'POST' }});
+        const resp = await fetch('/api/votes');
+        const freshData = await resp.json();
+        DATA.votes.detail = freshData.detail;
+        votesState = JSON.parse(JSON.stringify(freshData.detail));
+    }} catch(err) {{ console.error('Erreur reset:', err); }}
     document.getElementById('vote-filter-bat').value = '';
     document.getElementById('vote-filter-vote').value = '';
     document.getElementById('vote-filter-confiance').value = '';
@@ -868,6 +873,18 @@ function renderCanvassing() {{
     document.getElementById('canvassing-table').innerHTML = html;
 }}
 renderCanvassing();
+document.querySelectorAll('.checkbox-contact').forEach(cb => {{
+    cb.addEventListener('change', async e => {{
+        const idx = +e.target.dataset.idx;
+        const c = DATA.canvassing[idx];
+        c.contact_fait = e.target.checked ? 1 : 0;
+        await fetch(`/api/contact/${{c.lot_id}}`, {{
+            method: 'POST',
+            headers: {{ 'Content-Type': 'application/json' }},
+            body: JSON.stringify({{ contact_fait: c.contact_fait }})
+        }}).catch(err => console.error('Erreur sauvegarde contact:', err));
+    }});
+}});
 
 // ═══════════════ PLAN D'ACTION ═══════════════
 function renderPlan() {{

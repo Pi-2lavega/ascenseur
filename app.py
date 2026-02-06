@@ -144,6 +144,25 @@ def update_vote(lot_id):
         conn.close()
 
 
+@app.route("/api/contact/<int:lot_id>", methods=["POST"])
+@login_required
+def update_contact(lot_id):
+    data = request.get_json(silent=True) or {}
+    contact_fait = 1 if data.get("contact_fait") else 0
+    conn = _db()
+    try:
+        result = conn.execute(
+            "UPDATE vote_simulation SET contact_fait = ? WHERE lot_id = ?",
+            (contact_fait, lot_id),
+        )
+        conn.commit()
+        if result.rowcount == 0:
+            return jsonify({"error": "lot introuvable"}), 404
+        return jsonify({"ok": True})
+    finally:
+        conn.close()
+
+
 @app.route("/api/votes/reset", methods=["POST"])
 @login_required
 def reset_votes():
