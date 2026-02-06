@@ -50,18 +50,26 @@ LOGIN_HTML = """<!DOCTYPE html>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-background:#f5f6fa;display:flex;align-items:center;justify-content:center;min-height:100vh}
-.card{background:#fff;border-radius:12px;padding:40px;box-shadow:0 4px 24px rgba(0,0,0,.1);
-width:100%;max-width:360px;text-align:center}
-h1{font-size:20px;color:#2f5496;margin-bottom:8px}
-p.sub{font-size:13px;color:#636e72;margin-bottom:24px}
-input{width:100%;padding:12px;border:2px solid #dfe6e9;border-radius:8px;font-size:16px;
-text-align:center;letter-spacing:4px;outline:none;transition:border-color .2s}
-input:focus{border-color:#4472c4}
-button{width:100%;padding:12px;background:#2f5496;color:#fff;border:none;border-radius:8px;
-font-size:15px;font-weight:600;cursor:pointer;margin-top:16px;transition:background .2s}
-button:hover{background:#4472c4}
-.error{color:#d63031;font-size:13px;margin-top:12px}
+background:#0f1119;display:flex;align-items:center;justify-content:center;min-height:100vh;
+color:rgba(255,255,255,0.92)}
+body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;
+background:radial-gradient(ellipse at 20% 50%,rgba(108,138,255,0.08) 0%,transparent 50%),
+radial-gradient(ellipse at 80% 20%,rgba(76,217,123,0.05) 0%,transparent 50%);
+pointer-events:none;z-index:-1}
+.card{background:rgba(255,255,255,0.06);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+border:1px solid rgba(255,255,255,0.10);border-radius:16px;padding:40px;
+box-shadow:0 8px 32px rgba(0,0,0,.3);width:100%;max-width:360px;text-align:center}
+h1{font-size:20px;color:#6c8aff;margin-bottom:8px}
+p.sub{font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:24px}
+input{width:100%;padding:12px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;font-size:16px;
+text-align:center;letter-spacing:4px;outline:none;transition:border-color .2s;
+background:rgba(255,255,255,0.06);color:white}
+input:focus{border-color:#6c8aff;box-shadow:0 0 0 3px rgba(108,138,255,0.15)}
+button{width:100%;padding:12px;background:rgba(108,138,255,0.3);color:#fff;
+border:1px solid rgba(108,138,255,0.5);border-radius:8px;
+font-size:15px;font-weight:600;cursor:pointer;margin-top:16px;transition:all .2s}
+button:hover{background:rgba(108,138,255,0.4);border-color:#6c8aff}
+.error{color:#ff6b6b;font-size:13px;margin-top:12px}
 </style></head><body>
 <div class="card">
 <h1>Dashboard Ascenseur</h1>

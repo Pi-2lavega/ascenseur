@@ -77,60 +77,69 @@ def generate_html(data: dict) -> str:
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <style>
 * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f6fa; color: #2d3436; font-size: 14px; }}
-.header {{ background: linear-gradient(135deg, #2f5496, #4472c4); color: white; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }}
-.header h1 {{ font-size: 18px; font-weight: 600; }}
-.header .subtitle {{ font-size: 12px; opacity: 0.85; }}
-.tabs {{ display: flex; background: #fff; border-bottom: 2px solid #e0e0e0; overflow-x: auto; -webkit-overflow-scrolling: touch; position: sticky; top: 50px; z-index: 99; }}
-.tab {{ padding: 12px 20px; cursor: pointer; font-weight: 500; color: #636e72; border-bottom: 3px solid transparent; white-space: nowrap; transition: all 0.2s; }}
-.tab:hover {{ color: #2f5496; background: #f0f4ff; }}
-.tab.active {{ color: #2f5496; border-bottom-color: #2f5496; background: #f0f4ff; }}
-.panel {{ display: none; padding: 20px; max-width: 1200px; margin: 0 auto; }}
+body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f1119; color: rgba(255,255,255,0.92); font-size: 14px; min-height: 100vh; }}
+body::before {{ content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(ellipse at 20% 50%, rgba(108,138,255,0.08) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(76,217,123,0.05) 0%, transparent 50%), radial-gradient(ellipse at 50% 80%, rgba(255,159,67,0.04) 0%, transparent 50%); pointer-events: none; z-index: -1; }}
+.header {{ background: rgba(255,255,255,0.05); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-bottom: 1px solid rgba(255,255,255,0.08); color: white; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }}
+.header h1 {{ font-size: 18px; font-weight: 600; color: #fff; }}
+.header .subtitle {{ font-size: 12px; color: rgba(255,255,255,0.6); }}
+.tabs {{ display: flex; background: rgba(255,255,255,0.03); border-bottom: 1px solid rgba(255,255,255,0.08); overflow-x: auto; -webkit-overflow-scrolling: touch; position: sticky; top: 50px; z-index: 99; }}
+.tab {{ padding: 12px 20px; cursor: pointer; font-weight: 500; color: rgba(255,255,255,0.45); border-bottom: 3px solid transparent; white-space: nowrap; transition: all 0.2s; }}
+.tab:hover {{ color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.06); }}
+.tab.active {{ color: #6c8aff; border-bottom-color: #6c8aff; background: rgba(108,138,255,0.12); }}
+.panel {{ display: none; padding: 20px; max-width: 1200px; margin: 0 auto; animation: fadeIn 0.3s ease; }}
 .panel.active {{ display: block; }}
-.card {{ background: white; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
-.card h2 {{ font-size: 16px; color: #2f5496; margin-bottom: 12px; }}
-.card h3 {{ font-size: 14px; color: #636e72; margin-bottom: 8px; }}
+.card {{ background: rgba(255,255,255,0.06); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.10); border-radius: 16px; padding: 20px; margin-bottom: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); animation: fadeIn 0.3s ease; }}
+.card h2 {{ font-size: 16px; color: #6c8aff; margin-bottom: 12px; }}
+.card h3 {{ font-size: 14px; color: rgba(255,255,255,0.6); margin-bottom: 8px; }}
 table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
-th {{ background: #4472c4; color: white; padding: 8px 10px; text-align: left; }}
-td {{ padding: 6px 10px; border-bottom: 1px solid #eee; vertical-align: middle; line-height: 1.3; }}
-tr:nth-child(even) {{ background: #f8f9ff; }}
-tr:hover {{ background: #e8edff; }}
+th {{ background: rgba(108,138,255,0.15); color: #6c8aff; padding: 8px 10px; text-align: left; font-weight: 600; }}
+td {{ padding: 6px 10px; border-bottom: 1px solid rgba(255,255,255,0.06); vertical-align: middle; line-height: 1.3; color: rgba(255,255,255,0.85); }}
+tr:nth-child(even) {{ background: rgba(255,255,255,0.02); }}
+tr:hover {{ background: rgba(108,138,255,0.08); }}
 .tag {{ display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }}
-.tag-pour {{ background: #c6efce; color: #006100; }}
-.tag-contre {{ background: #ffc7ce; color: #9c0006; }}
-.tag-abstention {{ background: #ffeb9c; color: #9c5700; }}
-.tag-absent {{ background: #d9d9d9; color: #333; }}
-.tag-inconnu {{ background: #f0f0f0; color: #666; }}
-.tag-certain {{ background: #2f5496; color: #fff; }}
-.tag-probable {{ background: #4472c4; color: #fff; }}
-.tag-possible {{ background: #8faadc; color: #fff; }}
+.tag-pour {{ background: rgba(76,217,123,0.15); border: 1px solid rgba(76,217,123,0.4); color: #4cd97b; }}
+.tag-contre {{ background: rgba(255,107,107,0.15); border: 1px solid rgba(255,107,107,0.4); color: #ff6b6b; }}
+.tag-abstention {{ background: rgba(255,159,67,0.15); border: 1px solid rgba(255,159,67,0.4); color: #ff9f43; }}
+.tag-absent {{ background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.5); }}
+.tag-inconnu {{ background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.10); color: rgba(255,255,255,0.4); }}
+.tag-certain {{ background: rgba(108,138,255,0.25); border: 1px solid rgba(108,138,255,0.5); color: #6c8aff; }}
+.tag-probable {{ background: rgba(108,138,255,0.15); border: 1px solid rgba(108,138,255,0.35); color: #8aa4ff; }}
+.tag-possible {{ background: rgba(108,138,255,0.08); border: 1px solid rgba(108,138,255,0.2); color: #a0b4ff; }}
 .metric {{ text-align: center; padding: 16px; }}
-.metric .value {{ font-size: 28px; font-weight: 700; color: #2f5496; }}
-.metric .label {{ font-size: 12px; color: #636e72; margin-top: 4px; }}
+.metric .value {{ font-size: 28px; font-weight: 700; color: #6c8aff; text-shadow: 0 0 20px rgba(108,138,255,0.3); }}
+.metric .label {{ font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 4px; }}
 .metrics-row {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }}
-.progress-bar {{ height: 24px; background: #e0e0e0; border-radius: 12px; overflow: hidden; position: relative; }}
+.progress-bar {{ height: 24px; background: rgba(255,255,255,0.08); border-radius: 12px; overflow: hidden; position: relative; }}
 .progress-fill {{ height: 100%; border-radius: 12px; transition: width 0.5s; }}
-.progress-label {{ position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 12px; font-weight: 600; color: #333; }}
+.progress-label {{ position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 12px; font-weight: 600; color: #fff; }}
 .slider-container {{ margin: 16px 0; }}
-.slider-container input[type=range] {{ width: 100%; }}
-.btn {{ display: inline-block; padding: 6px 14px; border-radius: 6px; border: 1px solid #ccc; background: #fff; cursor: pointer; font-size: 12px; margin: 2px; transition: all 0.2s; }}
-.btn:hover {{ background: #4472c4; color: white; border-color: #4472c4; }}
-.btn.active {{ background: #2f5496; color: white; border-color: #2f5496; }}
-.highlight-box {{ background: #fff2cc; border-left: 4px solid #ed7d31; padding: 12px 16px; margin: 12px 0; border-radius: 0 8px 8px 0; }}
-.reco-box {{ background: #c6efce; border-left: 4px solid #70ad47; padding: 12px 16px; margin: 12px 0; border-radius: 0 8px 8px 0; }}
-select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; border: 1px solid #ccc; }}
+.slider-container input[type=range] {{ width: 100%; accent-color: #6c8aff; }}
+.btn {{ display: inline-block; padding: 6px 14px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.85); cursor: pointer; font-size: 12px; margin: 2px; transition: all 0.2s; }}
+.btn:hover {{ background: rgba(108,138,255,0.2); border-color: rgba(108,138,255,0.4); color: #fff; }}
+.btn.active {{ background: rgba(108,138,255,0.25); border-color: #6c8aff; color: #fff; }}
+.highlight-box {{ background: rgba(255,159,67,0.08); border-left: 4px solid #ff9f43; padding: 12px 16px; margin: 12px 0; border-radius: 0 8px 8px 0; color: rgba(255,255,255,0.85); }}
+.reco-box {{ background: rgba(76,217,123,0.08); border-left: 4px solid #4cd97b; padding: 12px 16px; margin: 12px 0; border-radius: 0 8px 8px 0; color: rgba(255,255,255,0.85); }}
+select, input[type=number] {{ background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: white; border-radius: 4px; }}
+select:focus, input[type=number]:focus {{ border-color: #6c8aff; box-shadow: 0 0 0 3px rgba(108,138,255,0.15); outline: none; }}
+select option {{ background: #1a1d2e; color: white; }}
+select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: white; }}
 .timeline {{ position: relative; padding-left: 30px; }}
-.timeline-item {{ position: relative; padding-bottom: 20px; border-left: 2px solid #ccc; padding-left: 20px; }}
+.timeline-item {{ position: relative; padding-bottom: 20px; border-left: 2px solid rgba(255,255,255,0.12); padding-left: 20px; }}
 .timeline-item:last-child {{ border-left: 2px solid transparent; }}
-.timeline-dot {{ position: absolute; left: -8px; top: 2px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; }}
-.timeline-dot.a_faire {{ background: #ccc; }}
-.timeline-dot.en_cours {{ background: #ed7d31; }}
-.timeline-dot.fait {{ background: #70ad47; }}
-.timeline-dot.bloque {{ background: #ff6b6b; }}
-.checkbox-contact {{ cursor: pointer; width: 18px; height: 18px; }}
+.timeline-dot {{ position: absolute; left: -8px; top: 2px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.2); }}
+.timeline-dot.a_faire {{ background: rgba(255,255,255,0.25); box-shadow: 0 0 8px rgba(255,255,255,0.1); }}
+.timeline-dot.en_cours {{ background: #ff9f43; box-shadow: 0 0 8px rgba(255,159,67,0.4); }}
+.timeline-dot.fait {{ background: #4cd97b; box-shadow: 0 0 8px rgba(76,217,123,0.4); }}
+.timeline-dot.bloque {{ background: #ff6b6b; box-shadow: 0 0 8px rgba(255,107,107,0.4); }}
+.checkbox-contact {{ cursor: pointer; width: 18px; height: 18px; accent-color: #6c8aff; }}
 .chart-container {{ max-width: 350px; margin: 0 auto; }}
 .radar-container {{ max-width: 400px; margin: 0 auto; }}
 .grid-2 {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }}
+::-webkit-scrollbar {{ width: 6px; height: 6px; }}
+::-webkit-scrollbar-track {{ background: transparent; }}
+::-webkit-scrollbar-thumb {{ background: rgba(255,255,255,0.15); border-radius: 3px; }}
+::-webkit-scrollbar-thumb:hover {{ background: rgba(255,255,255,0.25); }}
+@keyframes fadeIn {{ from {{ opacity: 0; transform: translateY(8px); }} to {{ opacity: 1; transform: translateY(0); }} }}
 @media (max-width: 768px) {{
     .grid-2 {{ grid-template-columns: 1fr; }}
     .header h1 {{ font-size: 15px; }}
@@ -194,24 +203,24 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bor
     </div>
     <div class="card">
         <h2>Prises en charge entre copropriétaires</h2>
-        <p style="font-size:12px; color:#636e72; margin-bottom:12px">
+        <p style="font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:12px">
             Un copropriétaire peut prendre en charge un pourcentage de la quote-part d'un autre lot
             (ex. : pour faciliter l'adhésion d'un voisin réticent).
         </p>
         <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:end; margin-bottom:12px">
             <div>
                 <label style="font-size:12px; display:block; margin-bottom:2px">Payeur (qui prend en charge)</label>
-                <select id="pec-payeur" style="padding:6px; border-radius:4px; border:1px solid #ccc; min-width:180px"></select>
+                <select id="pec-payeur" style="padding:6px; border-radius:4px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06); color:white; min-width:180px"></select>
             </div>
             <div>
                 <label style="font-size:12px; display:block; margin-bottom:2px">Bénéficiaire (lot allégé)</label>
-                <select id="pec-beneficiaire" style="padding:6px; border-radius:4px; border:1px solid #ccc; min-width:180px"></select>
+                <select id="pec-beneficiaire" style="padding:6px; border-radius:4px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06); color:white; min-width:180px"></select>
             </div>
             <div>
                 <label style="font-size:12px; display:block; margin-bottom:2px">% pris en charge</label>
-                <input type="number" id="pec-pct" min="1" max="100" value="50" style="padding:6px; border-radius:4px; border:1px solid #ccc; width:70px">
+                <input type="number" id="pec-pct" min="1" max="100" value="50" style="padding:6px; border-radius:4px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06); color:white; width:70px">
             </div>
-            <button class="btn" id="pec-add" style="padding:8px 16px; background:#4472c4; color:white; border:none; font-weight:600">Ajouter</button>
+            <button class="btn" id="pec-add" style="padding:8px 16px; background:rgba(108,138,255,0.3); color:white; border:1px solid rgba(108,138,255,0.5); font-weight:600">Ajouter</button>
         </div>
         <div id="pec-list"></div>
     </div>
@@ -231,10 +240,10 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bor
     <div class="card">
         <h2>Progression vers la majorité art.25</h2>
         <div class="progress-bar" id="art25-bar">
-            <div class="progress-fill" style="background: linear-gradient(90deg, #70ad47, #4472c4);"></div>
+            <div class="progress-fill" style="background: linear-gradient(90deg, #6c8aff, #4cd97b);"></div>
             <div class="progress-label"></div>
         </div>
-        <div id="art25-seuils" style="margin-top:8px; font-size:12px; color:#636e72"></div>
+        <div id="art25-seuils" style="margin-top:8px; font-size:12px; color:rgba(255,255,255,0.5)"></div>
     </div>
     <div class="card" id="card-par-bat">
         <h2>Par bâtiment</h2>
@@ -242,10 +251,10 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bor
     </div>
     <div class="card">
         <h2>Détail des votes</h2>
-        <div id="vote-filters" style="display:flex; flex-wrap:wrap; gap:10px; align-items:end; margin-bottom:8px; padding:10px; background:#f0f4ff; border-radius:6px; position:sticky; top:96px; z-index:50; box-shadow:0 2px 4px rgba(0,0,0,0.1)">
+        <div id="vote-filters" style="display:flex; flex-wrap:wrap; gap:10px; align-items:end; margin-bottom:8px; padding:10px; background:rgba(108,138,255,0.06); border:1px solid rgba(255,255,255,0.08); border-radius:6px; position:sticky; top:96px; z-index:50; box-shadow:0 2px 8px rgba(0,0,0,0.3)">
             <div>
-                <label style="font-size:11px; display:block; margin-bottom:2px; font-weight:600; color:#2f5496">Filtrer — Bâtiment</label>
-                <select id="vote-filter-bat" style="padding:5px 8px; border-radius:4px; border:1px solid #ccc; font-size:13px">
+                <label style="font-size:11px; display:block; margin-bottom:2px; font-weight:600; color:#6c8aff">Filtrer — Bâtiment</label>
+                <select id="vote-filter-bat" style="padding:5px 8px; border-radius:4px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06); color:white; font-size:13px">
                     <option value="">Tous</option>
                     <option value="A">Bât A</option>
                     <option value="B">Bât B</option>
@@ -253,8 +262,8 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bor
                 </select>
             </div>
             <div>
-                <label style="font-size:11px; display:block; margin-bottom:2px; font-weight:600; color:#2f5496">Filtrer — Vote</label>
-                <select id="vote-filter-vote" style="padding:5px 8px; border-radius:4px; border:1px solid #ccc; font-size:13px">
+                <label style="font-size:11px; display:block; margin-bottom:2px; font-weight:600; color:#6c8aff">Filtrer — Vote</label>
+                <select id="vote-filter-vote" style="padding:5px 8px; border-radius:4px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06); color:white; font-size:13px">
                     <option value="">Tous</option>
                     <option value="pour">Pour</option>
                     <option value="contre">Contre</option>
@@ -264,8 +273,8 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bor
                 </select>
             </div>
             <div>
-                <label style="font-size:11px; display:block; margin-bottom:2px; font-weight:600; color:#2f5496">Filtrer — Confiance</label>
-                <select id="vote-filter-confiance" style="padding:5px 8px; border-radius:4px; border:1px solid #ccc; font-size:13px">
+                <label style="font-size:11px; display:block; margin-bottom:2px; font-weight:600; color:#6c8aff">Filtrer — Confiance</label>
+                <select id="vote-filter-confiance" style="padding:5px 8px; border-radius:4px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06); color:white; font-size:13px">
                     <option value="">Toutes</option>
                     <option value="certain">Certain</option>
                     <option value="probable">Probable</option>
@@ -273,9 +282,9 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bor
                     <option value="inconnu">Inconnu</option>
                 </select>
             </div>
-            <div style="border-left:2px solid #ccc; padding-left:10px">
-                <label style="font-size:11px; display:block; margin-bottom:2px; font-weight:600; color:#ed7d31">Tri principal</label>
-                <select id="vote-sort1" style="padding:5px 8px; border-radius:4px; border:1px solid #ccc; font-size:13px">
+            <div style="border-left:2px solid rgba(255,255,255,0.12); padding-left:10px">
+                <label style="font-size:11px; display:block; margin-bottom:2px; font-weight:600; color:#ff9f43">Tri principal</label>
+                <select id="vote-sort1" style="padding:5px 8px; border-radius:4px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06); color:white; font-size:13px">
                     <option value="bat-asc">Bâtiment A→C</option>
                     <option value="bat-desc">Bâtiment C→A</option>
                     <option value="ta-desc">T. ascenseur ↓</option>
@@ -289,8 +298,8 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bor
                 </select>
             </div>
             <div>
-                <label style="font-size:11px; display:block; margin-bottom:2px; font-weight:600; color:#ed7d31">Tri secondaire</label>
-                <select id="vote-sort2" style="padding:5px 8px; border-radius:4px; border:1px solid #ccc; font-size:13px">
+                <label style="font-size:11px; display:block; margin-bottom:2px; font-weight:600; color:#ff9f43">Tri secondaire</label>
+                <select id="vote-sort2" style="padding:5px 8px; border-radius:4px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06); color:white; font-size:13px">
                     <option value="none">—</option>
                     <option value="ta-desc" selected>T. ascenseur ↓</option>
                     <option value="ta-asc">T. ascenseur ↑</option>
@@ -302,11 +311,11 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bor
                     <option value="vote">Vote</option>
                 </select>
             </div>
-            <div style="border-left:2px solid #ccc; padding-left:10px">
-                <button id="vote-reset" class="btn" style="padding:8px 14px; background:#ff6b6b; color:white; border:none; font-weight:600; font-size:12px; margin-top:14px; cursor:pointer">Réinitialiser</button>
+            <div style="border-left:2px solid rgba(255,255,255,0.12); padding-left:10px">
+                <button id="vote-reset" class="btn" style="padding:8px 14px; background:rgba(255,107,107,0.2); color:#ff6b6b; border:1px solid rgba(255,107,107,0.4); font-weight:600; font-size:12px; margin-top:14px; cursor:pointer">Réinitialiser</button>
             </div>
         </div>
-        <div id="vote-filter-count" style="font-size:12px; color:#636e72; margin-bottom:8px"></div>
+        <div id="vote-filter-count" style="font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:8px"></div>
         <div style="overflow-x:auto">
             <table id="votes-table"></table>
         </div>
@@ -332,6 +341,9 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bor
 </div>
 
 <script>
+Chart.defaults.color = 'rgba(255,255,255,0.6)';
+Chart.defaults.borderColor = 'rgba(255,255,255,0.08)';
+
 const DATA = {data_json};
 const C = DATA.constantes;
 
@@ -381,8 +393,8 @@ function renderDevis() {{
 
     // Radar chart
     const labels = ['Prix', 'Capacité', 'Accessibilité', 'Rapidité', 'Maintenance', 'Niveaux'];
-    const colors = ['#4472c4', '#ed7d31', '#70ad47', '#9b59b6'];
-    const bgColors = ['rgba(68,114,196,0.1)', 'rgba(237,125,49,0.1)', 'rgba(112,173,71,0.1)', 'rgba(155,89,182,0.1)'];
+    const colors = ['#6c8aff', '#ff9f43', '#4cd97b', '#c084fc'];
+    const bgColors = ['rgba(108,138,255,0.2)', 'rgba(255,159,67,0.2)', 'rgba(76,217,123,0.2)', 'rgba(192,132,252,0.2)'];
     const datasets = comparables.map((d, i) => ({{
         label: d.fournisseur,
         data: [d.score_prix, d.score_capacite, d.score_accessibilite, d.score_rapidite, d.score_maintenance, d.score_niveaux || 3],
@@ -402,7 +414,7 @@ function renderDevis() {{
         type: 'bar',
         data: {{
             labels: comparables.map(d => d.fournisseur),
-            datasets: [{{ label: 'Coût 10 ans (€)', data: cost10y, backgroundColor: ['#4472c4', '#ed7d31', '#70ad47'] }}]
+            datasets: [{{ label: 'Coût 10 ans (€)', data: cost10y, backgroundColor: ['#6c8aff', '#ff9f43', '#4cd97b'] }}]
         }},
         options: {{ plugins: {{ legend: {{ display: false }} }}, scales: {{ y: {{ beginAtZero: true, ticks: {{ callback: v => (v/1000).toFixed(0) + 'k €' }} }} }} }}
     }});
@@ -517,7 +529,7 @@ function renderSimulation(montant) {{
         if (l.lot_numero === 27) {{ lot27QP = qp; lot27Adj = adj; }}
 
         if (l.etage !== currentEtage) {{
-            if (currentEtage !== null) html += `<tr><td colspan="${{hasPec ? 8 : 7}}" style="height:4px; background:#e0e0e0"></td></tr>`;
+            if (currentEtage !== null) html += `<tr><td colspan="${{hasPec ? 8 : 7}}" style="height:4px; background:rgba(255,255,255,0.08)"></td></tr>`;
             currentEtage = l.etage;
         }}
 
@@ -526,7 +538,7 @@ function renderSimulation(montant) {{
         let adjCell = '';
         if (hasPec) {{
             if (isPayer && Math.abs(delta) > 0.01) {{
-                const color = delta > 0 ? '#c0392b' : '#27ae60';
+                const color = delta > 0 ? '#ff6b6b' : '#4cd97b';
                 const sign = delta > 0 ? '+' : '';
                 adjCell = `<td style="color:${{color}}; font-weight:bold">${{fmtEur(adj)}} <span style="font-size:11px">(${{sign}}${{delta.toFixed(0)}})</span></td>`;
             }} else {{
@@ -534,7 +546,7 @@ function renderSimulation(montant) {{
             }}
         }}
 
-        const rowStyle = !isPayer ? ' style="color:#999"' : '';
+        const rowStyle = !isPayer ? ' style="color:rgba(255,255,255,0.3)"' : '';
         html += `<tr${{rowStyle}}>
             <td>#${{l.lot_numero}}</td><td>${{l.etage}}</td><td>${{l.localisation}}</td>
             <td>${{fmtProp(l.proprietaire)}}</td><td>${{l.coef_ascenseur}}</td>
@@ -544,7 +556,7 @@ function renderSimulation(montant) {{
         </tr>`;
     }});
 
-    html += `<tr style="background:#fff2cc; font-weight:bold"><td colspan="6" style="text-align:right">TOTAL</td><td>${{fmtEur(totalQP)}}</td>`;
+    html += `<tr style="background:rgba(255,159,67,0.1); font-weight:bold"><td colspan="6" style="text-align:right">TOTAL</td><td>${{fmtEur(totalQP)}}</td>`;
     if (hasPec) html += `<td>${{fmtEur(totalQP)}}</td>`;
     html += '</tr>';
 
@@ -553,7 +565,7 @@ function renderSimulation(montant) {{
 
     let lot27Html = `<strong>Lot #27 (CLAVÉ) :</strong> ${{fmtEur(lot27QP)}}`;
     if (hasPec && Math.abs(lot27Adj - lot27QP) > 0.01) {{
-        lot27Html += ` → <strong style="color:${{lot27Adj > lot27QP ? '#c0392b' : '#27ae60'}}">${{fmtEur(lot27Adj)}}</strong>`;
+        lot27Html += ` → <strong style="color:${{lot27Adj > lot27QP ? '#ff6b6b' : '#4cd97b'}}">${{fmtEur(lot27Adj)}}</strong>`;
     }}
     lot27Html += ` pour un montant de ${{fmtEur(montant)}}`;
     document.getElementById('lot27-box').innerHTML = lot27Html;
@@ -604,7 +616,7 @@ function renderScenarioDesc() {{
             Seuls les copropriétaires du <strong>bâtiment A</strong> votent, sur la base de leurs tantièmes propres
             (${{C.tantiemes_bat_a.toLocaleString('fr-FR')}} tantièmes). Les copropriétaires de B et C ne participent pas.</div>`;
     }} else {{
-        el.innerHTML = `<div class="highlight-box" style="background:#fce4ec; border-left-color:#c0392b"><strong>Scénario 2 — AG générale (pas de parties communes spéciales)</strong><br>
+        el.innerHTML = `<div class="highlight-box" style="background:rgba(255,107,107,0.08); border-left-color:#ff6b6b"><strong>Scénario 2 — AG générale (pas de parties communes spéciales)</strong><br>
             Le règlement ne prévoit ni parties communes spéciales ni syndicat secondaire.
             <strong>Tous les copropriétaires (A, B et C)</strong> doivent voter en AG
             (${{C.tantiemes_total.toLocaleString('fr-FR')}} tantièmes).
@@ -634,10 +646,10 @@ function recalcVotes() {{
 
     // Metrics
     document.getElementById('vote-metrics').innerHTML = `
-        <div class="card metric"><div class="value" style="color:#70ad47">${{tPour}}</div><div class="label">Tantièmes POUR</div></div>
+        <div class="card metric"><div class="value" style="color:#4cd97b">${{tPour}}</div><div class="label">Tantièmes POUR</div></div>
         <div class="card metric"><div class="value" style="color:#ff6b6b">${{tContre}}</div><div class="label">Tantièmes CONTRE</div></div>
         <div class="card metric"><div class="value">${{tInconnu}}</div><div class="label">Tantièmes INCONNUS</div></div>
-        <div class="card metric"><div class="value" style="color:${{art25 ? '#70ad47' : passerelle ? '#ed7d31' : '#ff6b6b'}}">${{art25 ? 'ART.25 OK' : passerelle ? 'PASSERELLE' : 'INSUFFISANT'}}</div><div class="label">${{manquants > 0 ? 'Manque ' + manquants : 'Majorité atteinte'}}</div></div>
+        <div class="card metric"><div class="value" style="color:${{art25 ? '#4cd97b' : passerelle ? '#ff9f43' : '#ff6b6b'}}">${{art25 ? 'ART.25 OK' : passerelle ? 'PASSERELLE' : 'INSUFFISANT'}}</div><div class="label">${{manquants > 0 ? 'Manque ' + manquants : 'Majorité atteinte'}}</div></div>
     `;
 
     // Progress bar
@@ -681,9 +693,9 @@ function renderVotes() {{
             data: {{
                 labels: bats.map(b => 'Bât ' + b),
                 datasets: [
-                    {{ label: 'Pour', data: bats.map(b => batData[b].pour), backgroundColor: '#70ad47' }},
+                    {{ label: 'Pour', data: bats.map(b => batData[b].pour), backgroundColor: '#4cd97b' }},
                     {{ label: 'Contre', data: bats.map(b => batData[b].contre), backgroundColor: '#ff6b6b' }},
-                    {{ label: 'Autre', data: bats.map(b => batData[b].autre), backgroundColor: '#d9d9d9' }},
+                    {{ label: 'Autre', data: bats.map(b => batData[b].autre), backgroundColor: 'rgba(255,255,255,0.15)' }},
                 ]
             }},
             options: {{ responsive: true, plugins: {{ legend: {{ position: 'bottom' }} }}, scales: {{ x: {{ stacked: true }}, y: {{ stacked: true }} }} }}
@@ -755,7 +767,7 @@ function renderVotes() {{
                     `<option value="${{o}}" ${{v.vote===o?'selected':''}}>${{o}}</option>`
                 ).join('')}}
             </select></td>
-            <td><select class="confiance-select" data-idx="${{i}}" style="padding:2px 4px; border-radius:4px; font-size:12px; border:1px solid #ccc">
+            <td><select class="confiance-select" data-idx="${{i}}" style="padding:2px 4px; border-radius:4px; font-size:12px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06); color:white">
                 ${{['certain','probable','possible','inconnu'].map(o =>
                     `<option value="${{o}}" ${{v.confiance===o?'selected':''}}>${{o}}</option>`
                 ).join('')}}
@@ -867,8 +879,8 @@ function renderPlan() {{
                 <strong>Étape ${{a.etape}}</strong> — ${{a.titre}}
                 <span class="tag tag-${{a.statut === 'fait' ? 'pour' : a.statut === 'en_cours' ? 'abstention' : a.statut === 'bloque' ? 'contre' : 'inconnu'}}">${{a.statut.replace('_', ' ')}}</span>
             </div>
-            <div style="font-size:12px; color:#636e72; margin-bottom:4px">${{a.description || ''}}</div>
-            <div style="font-size:11px; color:#999">Cible : ${{a.date_cible || '?'}} | Responsable : ${{a.responsable || '?'}}</div>
+            <div style="font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:4px">${{a.description || ''}}</div>
+            <div style="font-size:11px; color:rgba(255,255,255,0.35)">Cible : ${{a.date_cible || '?'}} | Responsable : ${{a.responsable || '?'}}</div>
         </div>`;
     }});
     document.getElementById('timeline').innerHTML = html;
