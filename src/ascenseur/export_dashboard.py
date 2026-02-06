@@ -529,6 +529,10 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bac
         <h2>Détail des votes</h2>
         <div id="vote-filters" style="display:flex; flex-wrap:wrap; gap:10px; align-items:end; margin-bottom:8px; padding:10px; background:rgba(108,138,255,0.06); border:1px solid rgba(255,255,255,0.08); border-radius:6px; position:sticky; top:96px; z-index:50; box-shadow:0 2px 8px rgba(0,0,0,0.3)">
             <div>
+                <label style="font-size:11px; display:block; margin-bottom:2px; font-weight:600; color:#6c8aff">Recherche</label>
+                <input type="text" id="vote-search" placeholder="Nom du propriétaire…" style="padding:5px 8px; border-radius:4px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06); color:white; font-size:13px; width:160px">
+            </div>
+            <div>
                 <label style="font-size:11px; display:block; margin-bottom:2px; font-weight:600; color:#6c8aff">Filtrer — Bâtiment</label>
                 <select id="vote-filter-bat" style="padding:5px 8px; border-radius:4px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06); color:white; font-size:13px">
                     <option value="">Tous</option>
@@ -1145,6 +1149,8 @@ function renderVotes() {{
     if (filterBat) filtered = filtered.filter(v => v.batiment === filterBat);
     if (filterVote) filtered = filtered.filter(v => v.vote === filterVote);
     if (filterConfiance) filtered = filtered.filter(v => v.confiance === filterConfiance);
+    const searchTerm = document.getElementById('vote-search').value.trim().toLowerCase();
+    if (searchTerm) filtered = filtered.filter(v => (v.proprietaire || '').toLowerCase().includes(searchTerm));
 
     // Sort comparator builder
     const voteOrder = {{ pour: 0, contre: 1, abstention: 2, absent: 3, inconnu: 4 }};
@@ -1250,6 +1256,7 @@ renderScenarioDesc();
 ['vote-filter-bat', 'vote-filter-vote', 'vote-filter-confiance', 'vote-sort1', 'vote-sort2'].forEach(id => {{
     document.getElementById(id).addEventListener('change', () => renderVotes());
 }});
+document.getElementById('vote-search').addEventListener('input', () => renderVotes());
 // Reset button
 document.getElementById('vote-reset').addEventListener('click', async () => {{
     try {{
@@ -1259,6 +1266,7 @@ document.getElementById('vote-reset').addEventListener('click', async () => {{
         DATA.votes.detail = freshData.detail;
         votesState = JSON.parse(JSON.stringify(freshData.detail));
     }} catch(err) {{ console.error('Erreur reset:', err); }}
+    document.getElementById('vote-search').value = '';
     document.getElementById('vote-filter-bat').value = '';
     document.getElementById('vote-filter-vote').value = '';
     document.getElementById('vote-filter-confiance').value = '';
