@@ -15,6 +15,66 @@ from .strategy import get_full_canvassing_list
 
 OUTPUT_PATH = EXPORTS_DIR / "dashboard_ascenseur.html"
 
+# ── Budget historique (source: budget_2025.py / PV AG) ───────
+BUDGET_DATA = {
+    "historique": [
+        {"annee": 2022, "budget": 137720, "realise": 148623},
+        {"annee": 2023, "budget": 137720, "realise": 166817},
+        {"annee": 2024, "budget": 143002, "realise": 168087},
+        {"annee": 2025, "budget": 144000, "realise": None},
+    ],
+    "budget_2025": 144000,
+    "fonds_travaux_pct": 0.05,
+    "appel_trimestriel": 36000,
+}
+
+# ── Valorisation immobilière ──────────────────────────────────
+# Source : étude MeilleursAgents sur 50 000 transactions à Paris
+VALORISATION_DATA = {
+    "prix_m2_base": 9000,
+    "loyer_m2_base": 25,
+    "par_etage": {
+        1: {"appreciation_min": 0.008, "appreciation_max": 0.015,
+            "decote_min": 0.008, "decote_max": 0.015,
+            "impact_loyer_min": 0.015, "impact_loyer_max": 0.025},
+        2: {"appreciation_min": 0.008, "appreciation_max": 0.015,
+            "decote_min": 0.008, "decote_max": 0.015,
+            "impact_loyer_min": 0.015, "impact_loyer_max": 0.025},
+        3: {"appreciation_min": 0.008, "appreciation_max": 0.015,
+            "decote_min": 0.008, "decote_max": 0.015,
+            "impact_loyer_min": 0.020, "impact_loyer_max": 0.035},
+        4: {"appreciation_min": 0.015, "appreciation_max": 0.025,
+            "decote_min": 0.015, "decote_max": 0.025,
+            "impact_loyer_min": 0.025, "impact_loyer_max": 0.040},
+        5: {"appreciation_min": 0.015, "appreciation_max": 0.025,
+            "decote_min": 0.015, "decote_max": 0.025,
+            "impact_loyer_min": 0.030, "impact_loyer_max": 0.045},
+        6: {"appreciation_min": 0.020, "appreciation_max": 0.035,
+            "decote_min": 0.020, "decote_max": 0.035,
+            "impact_loyer_min": 0.035, "impact_loyer_max": 0.050},
+    },
+}
+
+
+def _compute_maintenance_per_lot(
+    conn: sqlite3.Connection, maintenance_ttc: float,
+) -> list[dict]:
+    """Calcule le coût de maintenance annuel par lot via calculer_repartition."""
+    lots = calculer_repartition(conn, maintenance_ttc)
+    total_ta = sum(l["tantieme_ascenseur"] for l in lots)
+    result = []
+    for lot in lots:
+        if lot["tantieme_ascenseur"] > 0:
+            part = maintenance_ttc * lot["tantieme_ascenseur"] / total_ta if total_ta else 0
+            result.append({
+                "lot_numero": lot["lot_numero"],
+                "etage": lot["etage"],
+                "proprietaire": lot["proprietaire"],
+                "tantieme_ascenseur": lot["tantieme_ascenseur"],
+                "maintenance_annuelle": round(part, 2),
+            })
+    return result
+
 
 def generate_dashboard_data(conn: sqlite3.Connection) -> dict:
     """Assemble toutes les données en un dict JSON-serializable."""
@@ -40,6 +100,30 @@ def generate_dashboard_data(conn: sqlite3.Connection) -> dict:
     # Action plan
     actions = conn.execute("SELECT * FROM action_plan ORDER BY etape").fetchall()
 
+    # Budget & Valorisation data
+    maintenance_par_fournisseur = {}
+    for d in comp["comparables"]:
+        maint_ht = d.get("maintenance_ht") or 0
+        maint_ttc = round(maint_ht * 1.20, 2)
+        maintenance_par_fournisseur[d["fournisseur"]] = {
+            "maintenance_ht": maint_ht,
+            "maintenance_ttc": maint_ttc,
+            "lots": _compute_maintenance_per_lot(conn, maint_ttc),
+        }
+
+    # Lots bât A pour la valorisation (avec tantièmes > 0)
+    lots_bat_a = calculer_repartition(conn, comp["comparables"][0]["montant_ttc"])
+    lots_valo = [
+        {
+            "lot_numero": l["lot_numero"],
+            "etage": l["etage"],
+            "proprietaire": l["proprietaire"],
+            "tantieme_ascenseur": l["tantieme_ascenseur"],
+            "quote_part": l["quote_part"],
+        }
+        for l in lots_bat_a if l["tantieme_ascenseur"] > 0
+    ]
+
     return {
         "devis": {
             "comparables": comp["comparables"],
@@ -54,6 +138,12 @@ def generate_dashboard_data(conn: sqlite3.Connection) -> dict:
         "canvassing": canvassing,
         "frais_annexes": [dict(f) for f in frais],
         "action_plan": [dict(a) for a in actions],
+        "budget_valorisation": {
+            "budget": BUDGET_DATA,
+            "maintenance": maintenance_par_fournisseur,
+            "valorisation": VALORISATION_DATA,
+            "lots": lots_valo,
+        },
         "constantes": {
             "tantiemes_total": TANTIEMES_TOTAL_COPRO,
             "tantiemes_bat_a": TANTIEMES_BAT_A,
@@ -135,6 +225,18 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bac
 .chart-container {{ max-width: 350px; margin: 0 auto; }}
 .radar-container {{ max-width: 400px; margin: 0 auto; }}
 .grid-2 {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }}
+.valo-input-row {{ display: flex; flex-wrap: wrap; gap: 16px; align-items: end; margin-bottom: 16px; padding: 12px; background: rgba(108,138,255,0.06); border: 1px solid rgba(108,138,255,0.15); border-radius: 8px; }}
+.valo-input-row label {{ font-size: 12px; font-weight: 600; color: #6c8aff; display: block; margin-bottom: 4px; }}
+.valo-input-row input, .valo-input-row select {{ padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.06); color: white; font-size: 14px; width: 140px; }}
+.compare-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }}
+.compare-card {{ padding: 20px; border-radius: 12px; text-align: center; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }}
+.compare-card.sans {{ background: rgba(255,107,107,0.08); border: 1px solid rgba(255,107,107,0.25); }}
+.compare-card.avec {{ background: rgba(76,217,123,0.08); border: 1px solid rgba(76,217,123,0.25); }}
+.compare-card .big-value {{ font-size: 24px; font-weight: 700; color: #fff; margin: 8px 0; }}
+.compare-card .sub {{ font-size: 12px; color: rgba(255,255,255,0.5); }}
+.roi-box {{ background: rgba(108,138,255,0.15); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(108,138,255,0.3); color: white; padding: 20px; border-radius: 12px; text-align: center; margin: 16px 0; }}
+.roi-box .roi-value {{ font-size: 36px; font-weight: 700; text-shadow: 0 0 20px rgba(108,138,255,0.3); }}
+.roi-box .roi-label {{ font-size: 14px; color: rgba(255,255,255,0.7); }}
 ::-webkit-scrollbar {{ width: 6px; height: 6px; }}
 ::-webkit-scrollbar-track {{ background: transparent; }}
 ::-webkit-scrollbar-thumb {{ background: rgba(255,255,255,0.15); border-radius: 3px; }}
@@ -142,10 +244,13 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bac
 @keyframes fadeIn {{ from {{ opacity: 0; transform: translateY(8px); }} to {{ opacity: 1; transform: translateY(0); }} }}
 @media (max-width: 768px) {{
     .grid-2 {{ grid-template-columns: 1fr; }}
+    .compare-grid {{ grid-template-columns: 1fr; }}
     .header h1 {{ font-size: 15px; }}
     .tab {{ padding: 10px 14px; font-size: 13px; }}
     .panel {{ padding: 12px; }}
     td, th {{ padding: 4px 6px; font-size: 12px; }}
+    .valo-input-row {{ gap: 8px; }}
+    .valo-input-row input, .valo-input-row select {{ width: 100px; }}
 }}
 </style>
 </head>
@@ -163,6 +268,7 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bac
     <div class="tab" data-panel="simulation">Simulation</div>
     <div class="tab" data-panel="votes">Votes</div>
     <div class="tab" data-panel="demarchage">Démarchage</div>
+    <div class="tab" data-panel="budget">Budget & Valorisation</div>
     <div class="tab" data-panel="plan">Plan d'action</div>
 </div>
 
@@ -332,6 +438,125 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bac
     </div>
 </div>
 
+<!-- ═══════════════ BUDGET & VALORISATION ═══════════════ -->
+<div class="panel" id="panel-budget">
+    <!-- Section 1 : Budget 2026 projeté -->
+    <div class="card">
+        <h2>Budget 2026 projeté — Impact ascenseur</h2>
+        <div class="metrics-row" id="budget-metrics"></div>
+        <div style="margin-bottom:12px">
+            <label style="font-size:12px; font-weight:600; color:#6c8aff">Contrat de maintenance :</label>
+            <select id="budget-contrat" style="padding:6px 10px; border-radius:4px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06); color:white; font-size:13px; margin-left:8px"></select>
+        </div>
+        <div class="compare-grid" id="budget-compare"></div>
+        <div class="highlight-box" id="budget-message"></div>
+    </div>
+    <div class="card">
+        <h2>Coût maintenance par lot (Bât A)</h2>
+        <div style="overflow-x:auto">
+            <table id="budget-lots-table"></table>
+        </div>
+    </div>
+    <div class="grid-2">
+        <div class="card">
+            <h2>Évolution budgétaire 2022-2026</h2>
+            <div style="max-width:500px; margin:0 auto"><canvas id="budget-evol-chart"></canvas></div>
+        </div>
+        <div class="card">
+            <h2>Part ascenseur dans le budget</h2>
+            <div class="chart-container"><canvas id="budget-doughnut-chart"></canvas></div>
+        </div>
+    </div>
+    <div class="card">
+        <h2>Comparaison des contrats de maintenance</h2>
+        <div style="max-width:600px; margin:0 auto"><canvas id="budget-contrats-chart"></canvas></div>
+    </div>
+
+    <!-- Section 2 : Valorisation immobilière -->
+    <div class="card" style="margin-top:24px; border-top:3px solid #ff9f43">
+        <h2 style="color:#ff9f43">Valorisation immobilière — Méthodologie et sources</h2>
+        <div style="font-size:13px; line-height:1.6; color:rgba(255,255,255,0.85)">
+            <p style="margin-bottom:10px">
+                L'estimation de la plus-value repose sur l'<strong>étude MeilleursAgents portant sur 50 000 transactions</strong>
+                à Paris et dans les 9 plus grandes villes de France. Cette étude mesure l'écart de prix au m²
+                entre appartements <em>avec</em> et <em>sans</em> ascenseur, à étage identique.
+            </p>
+            <div style="overflow-x:auto; margin:12px 0">
+                <table style="font-size:12px; max-width:700px">
+                    <tr><th>Étage</th><th>Prix/m² avec asc.</th><th>Prix/m² sans asc.</th><th>Prime ascenseur</th><th>Source</th></tr>
+                    <tr><td>2e</td><td>9 951 €</td><td>9 727 €</td><td><strong>+2,3%</strong></td><td rowspan="5" style="font-size:11px; vertical-align:middle">MeilleursAgents<br>(50 000 transactions)</td></tr>
+                    <tr><td>3e</td><td>10 068 €</td><td>9 839 €</td><td><strong>+2,3%</strong></td></tr>
+                    <tr><td>4e</td><td>10 244 €</td><td>9 829 €</td><td><strong>+4,2%</strong></td></tr>
+                    <tr><td>5e</td><td>10 357 €</td><td>9 960 €</td><td><strong>+4,0%</strong></td></tr>
+                    <tr><td>6e</td><td>10 600 €</td><td>10 063 €</td><td><strong>+5,3%</strong></td></tr>
+                </table>
+            </div>
+            <p style="margin-bottom:10px">
+                <strong>Effet comportemental :</strong> sans ascenseur, la valeur plafonne au 4e étage puis décroît
+                (le 6e sans ascenseur vaut <strong>-2,6%</strong> par rapport au 2e). Avec ascenseur, la valeur
+                augmente continûment jusqu'au dernier étage (<strong>+19%</strong> au 6e vs RDC).
+                L'installation d'un ascenseur inverse donc la courbe de valorisation des étages élevés.
+            </p>
+            <p style="margin-bottom:10px">
+                <strong>Impact locatif :</strong> l'ascenseur figure parmi les 5 équipements ayant le plus d'impact
+                sur les loyers à Paris. L'encadrement des loyers (loi ALUR) permet une majoration au titre
+                des « travaux d'amélioration » pouvant atteindre 15% du coût des travaux en supplément annuel.
+            </p>
+            <div class="highlight-box" style="font-size:12px; margin-top:8px">
+                <strong>Limites :</strong> Ces chiffres sont des moyennes parisiennes. L'impact réel dépend
+                du quartier, de l'état du bien, de la luminosité, et du marché local.
+                Les estimations ci-dessous utilisent les fourchettes de la prime ascenseur par étage
+                issues de l'étude MeilleursAgents, appliquées au prix au m² du 18e arrondissement.
+            </div>
+            <p style="margin-top:8px; font-size:11px; color:rgba(255,255,255,0.4)">
+                Sources : MeilleursAgents (2021), Notaires de Paris (indices hedoniques),
+                Agence des Enfants Rouges, SeLoger, Paris Property Group.
+            </p>
+        </div>
+    </div>
+    <div class="card">
+        <h2 style="color:#ff9f43">Simulation personnalisée</h2>
+        <div class="valo-input-row">
+            <div>
+                <label>Étage</label>
+                <select id="valo-etage">
+                    <option value="1">1er</option>
+                    <option value="2">2e</option>
+                    <option value="3" selected>3e</option>
+                    <option value="4">4e</option>
+                    <option value="5">5e</option>
+                    <option value="6">6e</option>
+                </select>
+            </div>
+            <div>
+                <label>Surface (m²)</label>
+                <input type="number" id="valo-surface" value="45" min="10" max="200" step="1">
+            </div>
+            <div>
+                <label>Prix au m² (€)</label>
+                <input type="number" id="valo-prixm2" value="9000" min="5000" max="15000" step="100">
+            </div>
+        </div>
+        <div class="metrics-row" id="valo-metrics"></div>
+        <div class="compare-grid" id="valo-compare"></div>
+        <div class="roi-box" id="valo-roi"></div>
+    </div>
+    <div class="card">
+        <h2>Impact locatif</h2>
+        <div id="valo-loyer-info" style="margin-bottom:12px"></div>
+        <div class="grid-2">
+            <div style="max-width:500px; margin:0 auto"><canvas id="valo-investissement-chart"></canvas></div>
+            <div style="max-width:400px; margin:0 auto"><canvas id="valo-loyer-chart"></canvas></div>
+        </div>
+    </div>
+    <div class="card">
+        <h2>Synthèse par étage</h2>
+        <div style="overflow-x:auto">
+            <table id="valo-synthese-table"></table>
+        </div>
+    </div>
+</div>
+
 <!-- ═══════════════ PLAN D'ACTION ═══════════════ -->
 <div class="panel" id="panel-plan">
     <div class="card">
@@ -354,6 +579,10 @@ document.querySelectorAll('.tab').forEach(tab => {{
         document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
         tab.classList.add('active');
         document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+        if (tab.dataset.panel === 'budget') {{
+            renderBudget();
+            renderValorisation();
+        }}
     }});
 }});
 
@@ -885,6 +1114,304 @@ document.querySelectorAll('.checkbox-contact').forEach(cb => {{
         }}).catch(err => console.error('Erreur sauvegarde contact:', err));
     }});
 }});
+
+// ═══════════════ BUDGET & VALORISATION ═══════════════
+const BV = DATA.budget_valorisation;
+const BUDGET = BV.budget;
+const MAINT = BV.maintenance;
+const VALO = BV.valorisation;
+
+// Populate contrat selector
+(function() {{
+    const sel = document.getElementById('budget-contrat');
+    Object.keys(MAINT).forEach((k, i) => {{
+        const opt = document.createElement('option');
+        opt.value = k;
+        opt.textContent = k + ' — ' + MAINT[k].maintenance_ttc.toLocaleString('fr-FR') + ' € TTC/an';
+        if (i === 0) opt.selected = true;
+        sel.appendChild(opt);
+    }});
+}})();
+
+function renderBudget() {{
+    const contrat = document.getElementById('budget-contrat').value;
+    const m = MAINT[contrat];
+    const maintTTC = m.maintenance_ttc;
+    const budget2025 = BUDGET.budget_2025;
+    const budgetAvec = budget2025 + maintTTC;
+    const pctBudget = (maintTTC / budgetAvec * 100);
+    const trimestreSans = budget2025 / 4;
+    const trimestreAvec = budgetAvec / 4;
+
+    // 4 metrics
+    document.getElementById('budget-metrics').innerHTML = `
+        <div class="card metric"><div class="value">${{budget2025.toLocaleString('fr-FR')}} €</div><div class="label">Budget SANS ascenseur</div></div>
+        <div class="card metric"><div class="value" style="color:#4cd97b">${{budgetAvec.toLocaleString('fr-FR')}} €</div><div class="label">Budget AVEC ascenseur</div></div>
+        <div class="card metric"><div class="value" style="color:#ff9f43">${{maintTTC.toLocaleString('fr-FR')}} €</div><div class="label">Maintenance annuelle (${{contrat}})</div></div>
+        <div class="card metric"><div class="value">${{pctBudget.toFixed(1)}}%</div><div class="label">Part dans le budget total</div></div>
+    `;
+
+    // Comparaison sans/avec
+    document.getElementById('budget-compare').innerHTML = `
+        <div class="compare-card sans">
+            <div style="font-weight:600; color:#ff6b6b; margin-bottom:8px">SANS ascenseur</div>
+            <div class="big-value">${{fmtEur(budget2025)}}</div>
+            <div class="sub">Charges annuelles</div>
+            <div style="margin-top:8px; font-size:16px; font-weight:600">${{fmtEur(trimestreSans)}}</div>
+            <div class="sub">par trimestre</div>
+        </div>
+        <div class="compare-card avec">
+            <div style="font-weight:600; color:#4cd97b; margin-bottom:8px">AVEC ascenseur (${{contrat}})</div>
+            <div class="big-value">${{fmtEur(budgetAvec)}}</div>
+            <div class="sub">Charges annuelles</div>
+            <div style="margin-top:8px; font-size:16px; font-weight:600">${{fmtEur(trimestreAvec)}}</div>
+            <div class="sub">par trimestre (+${{fmtEur(maintTTC / 4)}})</div>
+        </div>
+    `;
+
+    // Message clé
+    const lots = m.lots;
+    const minMaint = lots.length > 0 ? Math.min(...lots.map(l => l.maintenance_annuelle)) : 0;
+    const maxMaint = lots.length > 0 ? Math.max(...lots.map(l => l.maintenance_annuelle)) : 0;
+    document.getElementById('budget-message').innerHTML =
+        `<strong>Impact réel par copropriétaire :</strong> de <strong>${{fmtEur(minMaint)}}</strong> à <strong>${{fmtEur(maxMaint)}}</strong> par an selon l'étage — soit ${{fmtEur(minMaint / 12)}} à ${{fmtEur(maxMaint / 12)}} par mois. La maintenance ascenseur représente seulement <strong>${{pctBudget.toFixed(1)}}%</strong> du budget total.`;
+
+    // Tableau maintenance par lot
+    let thtml = '<tr><th>Étage</th><th>Lot</th><th>Propriétaire</th><th>Tant. asc.</th><th>Maintenance/an</th><th>Maintenance/mois</th></tr>';
+    lots.forEach(l => {{
+        thtml += `<tr>
+            <td>${{l.etage}}</td><td>#${{l.lot_numero}}</td>
+            <td>${{fmtProp(l.proprietaire)}}</td>
+            <td>${{l.tantieme_ascenseur.toFixed(1)}}</td>
+            <td><strong>${{fmtEur(l.maintenance_annuelle)}}</strong></td>
+            <td>${{fmtEur(l.maintenance_annuelle / 12)}}</td>
+        </tr>`;
+    }});
+    document.getElementById('budget-lots-table').innerHTML = thtml;
+
+    // Chart 1 : Évolution budgétaire 2022→2026
+    if (window._budgetEvolChart) window._budgetEvolChart.destroy();
+    const hist = BUDGET.historique;
+    const years = hist.map(h => h.annee).concat([2026]);
+    const budgets = hist.map(h => h.budget).concat([budget2025]);
+    const budgetsAsc = [null, null, null, null, maintTTC];
+    window._budgetEvolChart = new Chart(document.getElementById('budget-evol-chart'), {{
+        type: 'bar',
+        data: {{
+            labels: years,
+            datasets: [
+                {{ label: 'Budget courant', data: budgets, backgroundColor: '#6c8aff' }},
+                {{ label: 'Maintenance ascenseur', data: budgetsAsc, backgroundColor: '#ff9f43' }},
+            ]
+        }},
+        options: {{
+            responsive: true,
+            plugins: {{ legend: {{ position: 'bottom' }} }},
+            scales: {{
+                x: {{ stacked: true }},
+                y: {{ stacked: true, beginAtZero: true, ticks: {{ callback: v => (v/1000).toFixed(0) + 'k €' }} }}
+            }}
+        }}
+    }});
+
+    // Chart 2 : Doughnut part ascenseur
+    if (window._budgetDoughnutChart) window._budgetDoughnutChart.destroy();
+    window._budgetDoughnutChart = new Chart(document.getElementById('budget-doughnut-chart'), {{
+        type: 'doughnut',
+        data: {{
+            labels: ['Charges courantes', 'Maintenance ascenseur'],
+            datasets: [{{ data: [budget2025, maintTTC], backgroundColor: ['#6c8aff', '#ff9f43'] }}]
+        }},
+        options: {{
+            responsive: true,
+            plugins: {{
+                legend: {{ position: 'bottom' }},
+                tooltip: {{ callbacks: {{ label: ctx => ctx.label + ' : ' + fmtEur(ctx.raw) + ' (' + (ctx.raw / budgetAvec * 100).toFixed(1) + '%)' }} }}
+            }}
+        }}
+    }});
+
+    // Chart 3 : Comparaison des contrats
+    if (window._budgetContratsChart) window._budgetContratsChart.destroy();
+    const contratNames = Object.keys(MAINT);
+    const contratCosts = contratNames.map(k => MAINT[k].maintenance_ttc);
+    const contratColors = contratNames.map(k => k === contrat ? '#6c8aff' : 'rgba(108,138,255,0.4)');
+    window._budgetContratsChart = new Chart(document.getElementById('budget-contrats-chart'), {{
+        type: 'bar',
+        data: {{
+            labels: contratNames,
+            datasets: [{{ label: 'Maintenance TTC/an', data: contratCosts, backgroundColor: contratColors }}]
+        }},
+        options: {{
+            indexAxis: 'y',
+            responsive: true,
+            plugins: {{ legend: {{ display: false }} }},
+            scales: {{ x: {{ beginAtZero: true, ticks: {{ callback: v => fmtEur(v) }} }} }}
+        }}
+    }});
+}}
+
+document.getElementById('budget-contrat').addEventListener('change', renderBudget);
+renderBudget();
+
+// ── Valorisation ──
+function renderValorisation() {{
+    const etage = +document.getElementById('valo-etage').value;
+    const surface = +document.getElementById('valo-surface').value || 45;
+    const prixM2 = +document.getElementById('valo-prixm2').value || 9000;
+    const loyerM2 = VALO.loyer_m2_base;
+    const params = VALO.par_etage[etage] || VALO.par_etage[3];
+
+    const valeurBase = surface * prixM2;
+    const apprecMin = params.appreciation_min;
+    const apprecMax = params.appreciation_max;
+    const decoteMin = params.decote_min;
+    const decoteMax = params.decote_max;
+
+    const valeurSans = valeurBase * (1 - (decoteMin + decoteMax) / 2);
+    const valeurAvec = valeurBase * (1 + (apprecMin + apprecMax) / 2);
+    const plusValue = valeurAvec - valeurSans;
+
+    // Quote-part from first contrat
+    const contrat = document.getElementById('budget-contrat').value;
+    const lots = BV.lots.filter(l => l.etage === etage);
+    const avgQP = lots.length > 0 ? lots.reduce((s, l) => s + l.quote_part, 0) / lots.length : 0;
+    const roiPct = avgQP > 0 ? ((plusValue - avgQP) / avgQP * 100) : 0;
+    const roiX = avgQP > 0 ? (plusValue / avgQP) : 0;
+    const primeTotal = ((apprecMin + apprecMax) / 2 + (decoteMin + decoteMax) / 2) * 100;
+
+    // 4 metrics
+    document.getElementById('valo-metrics').innerHTML = `
+        <div class="card metric"><div class="value">${{fmtEur(valeurSans)}}</div><div class="label">Valeur sans ascenseur</div></div>
+        <div class="card metric"><div class="value" style="color:#4cd97b">${{fmtEur(valeurAvec)}}</div><div class="label">Valeur avec ascenseur</div></div>
+        <div class="card metric"><div class="value" style="color:#ff9f43">+${{fmtEur(plusValue)}}</div><div class="label">Plus-value estimée (prime ${{primeTotal.toFixed(1)}}%)</div></div>
+        <div class="card metric"><div class="value" style="color:${{roiPct >= 0 ? '#4cd97b' : '#ff6b6b'}}">${{roiPct >= 0 ? '+' : ''}}${{roiPct.toFixed(0)}}%</div><div class="label">Rendement net (PV − quote-part)</div></div>
+    `;
+
+    // Cartes avant/après
+    document.getElementById('valo-compare').innerHTML = `
+        <div class="compare-card sans">
+            <div style="font-weight:600; color:#ff6b6b; margin-bottom:8px">SANS ascenseur</div>
+            <div class="big-value">${{fmtEur(valeurSans)}}</div>
+            <div class="sub">Décote -${{((decoteMin + decoteMax) / 2 * 100).toFixed(1)}}% vs prix moyen du quartier</div>
+        </div>
+        <div class="compare-card avec">
+            <div style="font-weight:600; color:#4cd97b; margin-bottom:8px">AVEC ascenseur</div>
+            <div class="big-value">${{fmtEur(valeurAvec)}}</div>
+            <div class="sub">Prime ascenseur +${{((apprecMin + apprecMax) / 2 * 100).toFixed(1)}}% (source : MeilleursAgents)</div>
+        </div>
+    `;
+
+    // ROI box
+    const roiBg = roiPct >= 0 ? 'rgba(76,217,123,0.15)' : 'rgba(255,107,107,0.15)';
+    const roiBorder = roiPct >= 0 ? 'rgba(76,217,123,0.3)' : 'rgba(255,107,107,0.3)';
+    document.getElementById('valo-roi').innerHTML = `
+        <div class="roi-label">Quote-part investissement : ${{fmtEur(avgQP)}}</div>
+        <div class="roi-value">${{roiPct >= 0 ? '+' : ''}}${{fmtEur(plusValue - avgQP)}}</div>
+        <div class="roi-label">Plus-value nette après déduction de la quote-part</div>
+        <div style="margin-top:8px; font-size:13px; color:rgba(255,255,255,0.7)">
+            ${{roiX >= 1 ? 'La plus-value couvre ' + roiX.toFixed(1) + 'x la quote-part' : 'La plus-value couvre ' + (roiX * 100).toFixed(0) + '% de la quote-part'}}
+        </div>
+    `;
+    document.getElementById('valo-roi').style.background = roiBg;
+    document.getElementById('valo-roi').style.border = '1px solid ' + roiBorder;
+
+    // Impact locatif
+    const loyerAvant = surface * loyerM2;
+    const loyerApres = loyerAvant * (1 + (params.impact_loyer_min + params.impact_loyer_max) / 2);
+    const gainAnnuel = (loyerApres - loyerAvant) * 12;
+    document.getElementById('valo-loyer-info').innerHTML = `
+        <div class="compare-grid">
+            <div class="compare-card sans">
+                <div style="font-weight:600; color:#ff6b6b">Loyer SANS ascenseur</div>
+                <div class="big-value">${{fmtEur(loyerAvant)}}/mois</div>
+            </div>
+            <div class="compare-card avec">
+                <div style="font-weight:600; color:#4cd97b">Loyer AVEC ascenseur</div>
+                <div class="big-value">${{fmtEur(loyerApres)}}/mois</div>
+                <div class="sub">Gain annuel : +${{fmtEur(gainAnnuel)}}</div>
+            </div>
+        </div>
+    `;
+
+    // Chart : Investissement vs plus-value par étage
+    if (window._valoInvestChart) window._valoInvestChart.destroy();
+    const etages = [1, 2, 3, 4, 5, 6];
+    const investData = etages.map(e => {{
+        const eLots = BV.lots.filter(l => l.etage === e);
+        return eLots.length > 0 ? eLots.reduce((s, l) => s + l.quote_part, 0) / eLots.length : 0;
+    }});
+    const pvData = etages.map(e => {{
+        const p = VALO.par_etage[e];
+        const av = (p.appreciation_min + p.appreciation_max) / 2;
+        const dc = (p.decote_min + p.decote_max) / 2;
+        return surface * prixM2 * (av + dc);
+    }});
+    window._valoInvestChart = new Chart(document.getElementById('valo-investissement-chart'), {{
+        type: 'bar',
+        data: {{
+            labels: etages.map(e => 'Étage ' + e),
+            datasets: [
+                {{ label: 'Quote-part investissement', data: investData, backgroundColor: '#6c8aff' }},
+                {{ label: 'Plus-value estimée', data: pvData, backgroundColor: '#4cd97b' }},
+            ]
+        }},
+        options: {{
+            responsive: true,
+            plugins: {{ legend: {{ position: 'bottom' }} }},
+            scales: {{ y: {{ beginAtZero: true, ticks: {{ callback: v => (v/1000).toFixed(0) + 'k €' }} }} }}
+        }}
+    }});
+
+    // Chart : Loyer avant/après
+    if (window._valoLoyerChart) window._valoLoyerChart.destroy();
+    window._valoLoyerChart = new Chart(document.getElementById('valo-loyer-chart'), {{
+        type: 'bar',
+        data: {{
+            labels: ['Sans ascenseur', 'Avec ascenseur'],
+            datasets: [{{ label: 'Loyer mensuel (€)', data: [loyerAvant, loyerApres], backgroundColor: ['#ff6b6b', '#4cd97b'] }}]
+        }},
+        options: {{
+            responsive: true,
+            plugins: {{ legend: {{ display: false }} }},
+            scales: {{ y: {{ beginAtZero: true, ticks: {{ callback: v => fmtEur(v) }} }} }}
+        }}
+    }});
+
+    // Tableau synthèse par étage
+    let shtml = '<tr><th>Étage</th><th>Prime asc.</th><th>Quote-part moy.</th><th>Maintenance/an</th><th>Plus-value min</th><th>Plus-value max</th><th>Bilan net min</th><th>Bilan net max</th></tr>';
+    etages.forEach(e => {{
+        const p = VALO.par_etage[e];
+        const eLots = BV.lots.filter(l => l.etage === e);
+        const eqp = eLots.length > 0 ? eLots.reduce((s, l) => s + l.quote_part, 0) / eLots.length : 0;
+        const maintLots = MAINT[contrat].lots.filter(l => l.etage === e);
+        const eMaint = maintLots.length > 0 ? maintLots.reduce((s, l) => s + l.maintenance_annuelle, 0) / maintLots.length : 0;
+        const pvMin = surface * prixM2 * (p.appreciation_min + p.decote_min);
+        const pvMax = surface * prixM2 * (p.appreciation_max + p.decote_max);
+        const primeE = (p.appreciation_min + p.appreciation_max + p.decote_min + p.decote_max) / 2 * 100;
+        const netMin = pvMin - eqp;
+        const netMax = pvMax - eqp;
+        const netMinColor = netMin >= 0 ? '#4cd97b' : '#ff6b6b';
+        const netMaxColor = netMax >= 0 ? '#4cd97b' : '#ff6b6b';
+        shtml += `<tr>
+            <td><strong>Étage ${{e}}</strong></td>
+            <td>${{primeE.toFixed(1)}}%</td>
+            <td>${{fmtEur(eqp)}}</td>
+            <td>${{fmtEur(eMaint)}}/an</td>
+            <td>+${{fmtEur(pvMin)}}</td>
+            <td>+${{fmtEur(pvMax)}}</td>
+            <td style="color:${{netMinColor}}; font-weight:bold">${{netMin >= 0 ? '+' : ''}}${{fmtEur(netMin)}}</td>
+            <td style="color:${{netMaxColor}}; font-weight:bold">${{netMax >= 0 ? '+' : ''}}${{fmtEur(netMax)}}</td>
+        </tr>`;
+    }});
+    document.getElementById('valo-synthese-table').innerHTML = shtml;
+}}
+
+['valo-etage', 'valo-surface', 'valo-prixm2'].forEach(id => {{
+    document.getElementById(id).addEventListener('change', renderValorisation);
+    document.getElementById(id).addEventListener('input', renderValorisation);
+}});
+renderValorisation();
 
 // ═══════════════ PLAN D'ACTION ═══════════════
 function renderPlan() {{
