@@ -11,7 +11,7 @@ from ..config import (
 from .devis import get_devis_comparison
 from .simulation import calculer_repartition
 from .votes import calculer_resultats, get_votes_detail
-from .strategy import get_full_canvassing_list
+from .strategy import get_full_canvassing_list, ARGUMENTS_PAR_ETAGE, ARGUMENT_BAT_BC
 
 OUTPUT_PATH = EXPORTS_DIR / "dashboard_ascenseur.html"
 
@@ -54,6 +54,73 @@ VALORISATION_DATA = {
             "impact_loyer_min": 0.035, "impact_loyer_max": 0.050},
     },
 }
+
+# ── Arguments par profil d'occupancy ─────────────────────────
+ARGUMENTS_OVERLAY = {
+    "habitant": {
+        "titre": "Vous y vivez — l'ascenseur change votre quotidien",
+        "points": [
+            "Confort au quotidien : courses, poussettes, valises, livraisons",
+            "Anticipation du vieillissement — monter 4 à 6 étages à pied deviendra difficile",
+            "Accessibilité pour vos visiteurs (parents âgés, amis PMR)",
+            "Qualité de vie mesurable : moins de fatigue, plus de sérénité",
+        ],
+    },
+    "bailleur": {
+        "titre": "Investissement locatif — rentabilisez votre bien",
+        "points": [
+            "Loyer majoré : la loi ALUR permet +2 à 5% au titre des travaux d'amélioration",
+            "Fidélisation du locataire — l'ascenseur réduit le turnover et les vacances locatives",
+            "Attractivité renforcée : votre annonce se démarque sur le marché",
+            "Plus-value revente : un bien avec ascenseur se vend plus vite et plus cher",
+        ],
+    },
+    "sci": {
+        "titre": "Raisonnement patrimonial — optimisation d'actif",
+        "points": [
+            "ROI rationnel : la plus-value dépasse la quote-part dès l'étage 2",
+            "Optimisation de la valeur d'actif pour les associés de la SCI",
+            "Charge de maintenance modeste rapportée au gain patrimonial",
+            "Décision d'investissement logique pour tout gestionnaire d'actifs",
+        ],
+    },
+    "cs_member": {
+        "titre": "Votre rôle au conseil syndical",
+        "points": [
+            "En tant que membre du CS, votre adhésion envoie un signal fort",
+            "Vous incarnez le leadership et la cohérence du conseil syndical",
+            "Votre vote « pour » encourage les indécis à suivre",
+            "Le CS porte ce projet — votre soutien lui donne du poids symbolique",
+        ],
+    },
+}
+
+
+def _classify_occupancy(conn: sqlite3.Connection) -> dict[int, str]:
+    """Classifie chaque lot : 'habitant', 'bailleur' ou 'inconnu'.
+
+    - Si un locataire actif existe → bailleur
+    - Sinon si le propriétaire est aussi résident → habitant
+    - Sinon → inconnu
+    """
+    rows = conn.execute(
+        """SELECT lp.lot_id, lp.role
+           FROM lot_personne lp
+           WHERE lp.actif = 1
+             AND lp.role IN ('proprietaire', 'locataire', 'resident')"""
+    ).fetchall()
+    lot_roles: dict[int, set[str]] = {}
+    for r in rows:
+        lot_roles.setdefault(r[0], set()).add(r[1])
+    result: dict[int, str] = {}
+    for lot_id, roles in lot_roles.items():
+        if "locataire" in roles:
+            result[lot_id] = "bailleur"
+        elif "resident" in roles and "proprietaire" in roles:
+            result[lot_id] = "habitant"
+        else:
+            result[lot_id] = "inconnu"
+    return result
 
 
 def _compute_maintenance_per_lot(
@@ -124,6 +191,62 @@ def generate_dashboard_data(conn: sqlite3.Connection) -> dict:
         for l in lots_bat_a if l["tantieme_ascenseur"] > 0
     ]
 
+    # ── Argumentaire : données enrichies par lot ─────────────
+    occupancy = _classify_occupancy(conn)
+    # Quote-parts CEPA (premier devis comparable)
+    cepa_montant = comp["comparables"][0]["montant_ttc"]
+    cepa_lots = calculer_repartition(conn, cepa_montant)
+    cepa_map = {l["lot_numero"]: l for l in cepa_lots}
+    # Maintenance premier fournisseur
+    first_maint_key = comp["comparables"][0]["fournisseur"]
+    maint_ttc_0 = round((comp["comparables"][0].get("maintenance_ht") or 0) * 1.20, 2)
+    maint_lots_0 = _compute_maintenance_per_lot(conn, maint_ttc_0)
+    maint_map = {l["lot_numero"]: l["maintenance_annuelle"] for l in maint_lots_0}
+
+    arg_rows = conn.execute(
+        """SELECT l.id AS lot_id, l.numero, b.code AS batiment, l.etage,
+                  l.localisation, l.tantiemes, l.coef_ascenseur,
+                  vs.vote, vs.confiance,
+                  GROUP_CONCAT(DISTINCT p.nom_complet) AS proprietaire,
+                  MAX(p.est_societe) AS est_societe,
+                  MAX(p.est_membre_cs) AS est_membre_cs
+           FROM lot l
+           JOIN batiment b ON l.batiment_id = b.id
+           LEFT JOIN lot_personne lp ON lp.lot_id = l.id
+                AND lp.role = 'proprietaire' AND lp.actif = 1
+           LEFT JOIN personne p ON lp.personne_id = p.id
+           LEFT JOIN vote_simulation vs ON vs.lot_id = l.id
+           GROUP BY l.id
+           ORDER BY b.code, l.etage, l.numero"""
+    ).fetchall()
+
+    # Surface estimée : ratio 192.5 TA ≈ 65m² (lot 28 ref)
+    ta_to_m2 = 65.0 / 192.5
+
+    argumentaire_lots = []
+    for r in arg_rows:
+        row = dict(r)
+        lot_id = row["lot_id"]
+        lot_num = row["numero"]
+        cepa = cepa_map.get(lot_num, {})
+        ta = cepa.get("tantieme_ascenseur", 0) if isinstance(cepa, dict) else 0
+        qp = cepa.get("quote_part", 0) if isinstance(cepa, dict) else 0
+        surface_est = round(row["tantiemes"] * ta_to_m2, 1) if row["tantiemes"] else 0
+        mensualite_10 = round(qp / 120, 2) if qp else 0
+        maint_an = maint_map.get(lot_num, 0)
+        row["occupancy"] = occupancy.get(lot_id, "inconnu")
+        row["quote_part_cepa"] = round(qp, 2)
+        row["tantieme_ascenseur"] = ta
+        row["surface_estimee"] = surface_est
+        row["mensualite_10ans"] = mensualite_10
+        row["maintenance_annuelle"] = round(maint_an, 2)
+        argumentaire_lots.append(row)
+
+    etage_args = {}
+    for k, v in ARGUMENTS_PAR_ETAGE.items():
+        etage_args[k] = {"titre": v["titre"], "argument": v["argument"]}
+    bat_bc_arg = {"titre": ARGUMENT_BAT_BC["titre"], "argument": ARGUMENT_BAT_BC["argument"]}
+
     return {
         "devis": {
             "comparables": comp["comparables"],
@@ -143,6 +266,12 @@ def generate_dashboard_data(conn: sqlite3.Connection) -> dict:
             "maintenance": maintenance_par_fournisseur,
             "valorisation": VALORISATION_DATA,
             "lots": lots_valo,
+        },
+        "argumentaire": {
+            "lots": argumentaire_lots,
+            "overlays": ARGUMENTS_OVERLAY,
+            "etage_arguments": etage_args,
+            "bat_bc_argument": bat_bc_arg,
         },
         "constantes": {
             "tantiemes_total": TANTIEMES_TOTAL_COPRO,
@@ -241,6 +370,44 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bac
 ::-webkit-scrollbar-track {{ background: transparent; }}
 ::-webkit-scrollbar-thumb {{ background: rgba(255,255,255,0.15); border-radius: 3px; }}
 ::-webkit-scrollbar-thumb:hover {{ background: rgba(255,255,255,0.25); }}
+/* ── Argumentaire ── */
+.arg-card-header {{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }}
+.lot-info {{ font-size: 22px; font-weight: 700; color: #fff; }}
+.lot-sub {{ font-size: 13px; color: rgba(255,255,255,0.5); margin-top: 4px; }}
+.arg-tags {{ display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }}
+.arg-tag {{ display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }}
+.arg-tag-habitant {{ background: rgba(108,138,255,0.15); border: 1px solid rgba(108,138,255,0.4); color: #6c8aff; }}
+.arg-tag-bailleur {{ background: rgba(255,159,67,0.15); border: 1px solid rgba(255,159,67,0.4); color: #ff9f43; }}
+.arg-tag-sci {{ background: rgba(192,132,252,0.15); border: 1px solid rgba(192,132,252,0.4); color: #c084fc; }}
+.arg-tag-cs {{ background: rgba(76,217,123,0.15); border: 1px solid rgba(76,217,123,0.4); color: #4cd97b; }}
+.arg-tag-inconnu {{ background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: rgba(255,255,255,0.4); }}
+.arg-financial-box {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 16px; }}
+.arg-financial-item {{ background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px; text-align: center; }}
+.arg-financial-item .val {{ font-size: 18px; font-weight: 700; color: #6c8aff; }}
+.arg-financial-item .lbl {{ font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 2px; }}
+.arg-main-text {{ background: rgba(108,138,255,0.06); border-left: 4px solid #6c8aff; padding: 14px 18px; border-radius: 0 10px 10px 0; margin-bottom: 16px; line-height: 1.6; }}
+.arg-main-text .arg-title {{ font-weight: 700; color: #6c8aff; margin-bottom: 6px; }}
+.arg-overlay-section {{ background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 14px 18px; margin-bottom: 12px; }}
+.arg-overlay-section h4 {{ font-size: 13px; font-weight: 700; color: #ff9f43; margin-bottom: 8px; }}
+.arg-bullet-list {{ list-style: none; padding: 0; }}
+.arg-bullet-list li {{ padding: 4px 0 4px 22px; position: relative; font-size: 13px; color: rgba(255,255,255,0.85); line-height: 1.5; }}
+.arg-bullet-list li::before {{ content: '\2714'; position: absolute; left: 0; color: #4cd97b; font-size: 12px; }}
+.arg-vote-context {{ background: rgba(255,159,67,0.08); border-left: 4px solid #ff9f43; padding: 12px 16px; border-radius: 0 8px 8px 0; margin-bottom: 16px; font-size: 13px; }}
+.arg-filter-chip {{ display: inline-block; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.6); transition: all 0.2s; margin: 3px; }}
+.arg-filter-chip:hover {{ background: rgba(108,138,255,0.12); border-color: rgba(108,138,255,0.3); color: rgba(255,255,255,0.85); }}
+.arg-filter-chip.active {{ background: rgba(108,138,255,0.25); border-color: #6c8aff; color: #fff; }}
+.arg-list-table tr {{ cursor: pointer; transition: background 0.15s; }}
+.arg-list-table tr:hover {{ background: rgba(108,138,255,0.12) !important; }}
+@media print {{
+    body {{ background: #fff !important; color: #000 !important; }}
+    body::before {{ display: none; }}
+    .header, .tabs, .arg-filter-chip, #arg-filters-row, #arg-list {{ display: none !important; }}
+    .panel {{ display: block !important; max-width: none; }}
+    #panel-argumentaire {{ display: block !important; }}
+    .card {{ border: 1px solid #ddd; box-shadow: none; background: #fff; }}
+    .arg-tag {{ border: 1px solid #999; }}
+    .arg-main-text {{ border-left-color: #333; }}
+}}
 @keyframes fadeIn {{ from {{ opacity: 0; transform: translateY(8px); }} to {{ opacity: 1; transform: translateY(0); }} }}
 @media (max-width: 768px) {{
     .grid-2 {{ grid-template-columns: 1fr; }}
@@ -251,6 +418,8 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bac
     td, th {{ padding: 4px 6px; font-size: 12px; }}
     .valo-input-row {{ gap: 8px; }}
     .valo-input-row input, .valo-input-row select {{ width: 100px; }}
+    .arg-financial-box {{ grid-template-columns: repeat(2, 1fr); }}
+    .arg-card-header {{ flex-direction: column; }}
 }}
 </style>
 </head>
@@ -268,6 +437,7 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bac
     <div class="tab" data-panel="simulation">Simulation</div>
     <div class="tab" data-panel="votes">Votes</div>
     <div class="tab" data-panel="demarchage">Démarchage</div>
+    <div class="tab" data-panel="argumentaire">Argumentaire</div>
     <div class="tab" data-panel="budget">Budget & Valorisation</div>
     <div class="tab" data-panel="plan">Plan d'action</div>
 </div>
@@ -438,6 +608,32 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bac
     </div>
 </div>
 
+<!-- ═══════════════ ARGUMENTAIRE ═══════════════ -->
+<div class="panel" id="panel-argumentaire">
+    <div class="card">
+        <h2>Argumentaire personnalisé par propriétaire</h2>
+        <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:end; margin-bottom:16px">
+            <div>
+                <label style="font-size:12px; font-weight:600; color:#6c8aff; display:block; margin-bottom:4px">Sélectionner un propriétaire</label>
+                <select id="arg-proprietaire" style="padding:8px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06); color:white; font-size:13px; min-width:300px">
+                    <option value="">— Tous les lots —</option>
+                </select>
+            </div>
+            <button class="btn" id="arg-clear" style="padding:8px 14px; background:rgba(255,107,107,0.15); color:#ff6b6b; border:1px solid rgba(255,107,107,0.3)">Réinitialiser</button>
+        </div>
+        <div id="arg-filters-row" style="margin-bottom:12px"></div>
+        <div id="arg-counter" style="font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:12px"></div>
+    </div>
+    <div id="arg-card" style="display:none"></div>
+    <div id="arg-list">
+        <div class="card">
+            <div style="overflow-x:auto">
+                <table id="arg-list-table" class="arg-list-table"></table>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- ═══════════════ BUDGET & VALORISATION ═══════════════ -->
 <div class="panel" id="panel-budget">
     <!-- Section 1 : Budget 2026 projeté -->
@@ -582,6 +778,9 @@ document.querySelectorAll('.tab').forEach(tab => {{
         if (tab.dataset.panel === 'budget') {{
             renderBudget();
             renderValorisation();
+        }}
+        if (tab.dataset.panel === 'argumentaire') {{
+            renderArgumentaire();
         }}
     }});
 }});
@@ -1114,6 +1313,229 @@ document.querySelectorAll('.checkbox-contact').forEach(cb => {{
         }}).catch(err => console.error('Erreur sauvegarde contact:', err));
     }});
 }});
+
+// ═══════════════ ARGUMENTAIRE ═══════════════
+const ARG = DATA.argumentaire;
+const ARG_VALO = DATA.budget_valorisation.valorisation;
+
+// Populate dropdown
+(function() {{
+    const sel = document.getElementById('arg-proprietaire');
+    ARG.lots.forEach(lot => {{
+        const opt = document.createElement('option');
+        opt.value = lot.lot_id;
+        opt.textContent = `Lot #${{lot.numero}} — ${{(lot.proprietaire || '?').split(',')[0]}} (Ét.${{lot.etage}}, Bât ${{lot.batiment}})`;
+        sel.appendChild(opt);
+    }});
+}})();
+
+// Filter chips
+const ARG_FILTERS = [
+    {{ key: 'habitant', label: 'Habitant', fn: l => l.occupancy === 'habitant' }},
+    {{ key: 'bailleur', label: 'Bailleur', fn: l => l.occupancy === 'bailleur' }},
+    {{ key: 'sci', label: 'SCI', fn: l => l.est_societe }},
+    {{ key: 'cs', label: 'Membre CS', fn: l => l.est_membre_cs }},
+    {{ key: 'etage4', label: 'Étage ≥ 4', fn: l => l.etage >= 4 }},
+    {{ key: 'rdc', label: 'RDC', fn: l => l.etage === 0 }},
+    {{ key: 'contre', label: 'Vote contre', fn: l => l.vote === 'contre' }},
+    {{ key: 'vinconnu', label: 'Vote inconnu', fn: l => l.vote === 'inconnu' }},
+    {{ key: 'absent', label: 'Absent', fn: l => l.vote === 'absent' }},
+];
+let argActiveFilters = new Set();
+
+(function() {{
+    const row = document.getElementById('arg-filters-row');
+    ARG_FILTERS.forEach(f => {{
+        const chip = document.createElement('span');
+        chip.className = 'arg-filter-chip';
+        chip.dataset.key = f.key;
+        chip.textContent = f.label;
+        chip.addEventListener('click', () => {{
+            chip.classList.toggle('active');
+            if (chip.classList.contains('active')) argActiveFilters.add(f.key);
+            else argActiveFilters.delete(f.key);
+            document.getElementById('arg-proprietaire').value = '';
+            renderArgumentaire();
+        }});
+        row.appendChild(chip);
+    }});
+}})();
+
+function getArgBaseArgument(lot) {{
+    if (lot.batiment !== 'A') return ARG.bat_bc_argument;
+    return ARG.etage_arguments[lot.etage] || ARG.etage_arguments[0] || {{ titre: '', argument: '' }};
+}}
+
+function getArgOverlayKeys(lot) {{
+    const keys = [];
+    if (lot.occupancy === 'habitant') keys.push('habitant');
+    if (lot.occupancy === 'bailleur') keys.push('bailleur');
+    if (lot.est_societe) keys.push('sci');
+    if (lot.est_membre_cs) keys.push('cs_member');
+    return keys;
+}}
+
+function getVoteContext(lot) {{
+    if (lot.vote === 'inconnu') return {{ cls: 'arg-tag-inconnu', text: 'Vote non connu — c\\'est l\\'occasion de présenter le projet et de recueillir son avis.' }};
+    if (lot.vote === 'contre') return {{ cls: 'tag-contre', text: 'A exprimé des réserves — il est essentiel de comprendre ses objections et d\\'y répondre point par point.' }};
+    if (lot.vote === 'absent') return {{ cls: 'tag-absent', text: 'Non joignable jusqu\\'ici — prévoir une visite en personne ou un courrier.' }};
+    if (lot.vote === 'pour') return {{ cls: 'tag-pour', text: 'Déjà favorable — le remercier et l\\'encourager à parler du projet autour de lui.' }};
+    return null;
+}}
+
+function computeValoForLot(lot) {{
+    const etage = lot.etage || 0;
+    const params = ARG_VALO.par_etage[etage];
+    if (!params || etage === 0) return null;
+    const surface = lot.surface_estimee || 0;
+    const prixM2 = ARG_VALO.prix_m2_base;
+    const valBase = surface * prixM2;
+    const avgApprec = (params.appreciation_min + params.appreciation_max) / 2;
+    const avgDecote = (params.decote_min + params.decote_max) / 2;
+    const pv = valBase * (avgApprec + avgDecote);
+    return {{ plus_value: pv, surface, prime_pct: ((avgApprec + avgDecote) * 100).toFixed(1) }};
+}}
+
+function renderArgCard(lot) {{
+    const base = getArgBaseArgument(lot);
+    const overlayKeys = getArgOverlayKeys(lot);
+    const voteCtx = getVoteContext(lot);
+    const valo = computeValoForLot(lot);
+
+    // Tags
+    let tagsHtml = '';
+    const occClass = lot.occupancy === 'habitant' ? 'arg-tag-habitant' : lot.occupancy === 'bailleur' ? 'arg-tag-bailleur' : 'arg-tag-inconnu';
+    tagsHtml += `<span class="arg-tag ${{occClass}}">${{lot.occupancy}}</span>`;
+    if (lot.est_societe) tagsHtml += '<span class="arg-tag arg-tag-sci">SCI</span>';
+    if (lot.est_membre_cs) tagsHtml += '<span class="arg-tag arg-tag-cs">Membre CS</span>';
+    tagsHtml += `<span class="arg-tag tag-${{lot.vote || 'inconnu'}}">${{lot.vote || 'inconnu'}}</span>`;
+    if (lot.confiance) tagsHtml += `<span class="arg-tag tag-${{lot.confiance}}">${{lot.confiance}}</span>`;
+
+    // Financial box
+    let finHtml = '';
+    if (lot.quote_part_cepa > 0) {{
+        finHtml += `<div class="arg-financial-item"><div class="val">${{fmtEur(lot.quote_part_cepa)}}</div><div class="lbl">Quote-part CEPA</div></div>`;
+        finHtml += `<div class="arg-financial-item"><div class="val">${{fmtEur(lot.mensualite_10ans)}}</div><div class="lbl">Mensualité 10 ans</div></div>`;
+    }}
+    if (valo) {{
+        finHtml += `<div class="arg-financial-item"><div class="val" style="color:#4cd97b">+${{fmtEur(valo.plus_value)}}</div><div class="lbl">Plus-value (${{valo.prime_pct}}%)</div></div>`;
+        const roi = lot.quote_part_cepa > 0 ? (valo.plus_value / lot.quote_part_cepa) : 0;
+        finHtml += `<div class="arg-financial-item"><div class="val" style="color:${{roi >= 1 ? '#4cd97b' : '#ff9f43'}}">${{roi.toFixed(1)}}x</div><div class="lbl">ROI (PV / QP)</div></div>`;
+    }}
+    if (lot.maintenance_annuelle > 0) {{
+        finHtml += `<div class="arg-financial-item"><div class="val">${{fmtEur(lot.maintenance_annuelle)}}</div><div class="lbl">Maintenance/an</div></div>`;
+        finHtml += `<div class="arg-financial-item"><div class="val">${{fmtEur(lot.maintenance_annuelle / 12)}}</div><div class="lbl">Maintenance/mois</div></div>`;
+    }}
+
+    // Overlays
+    let overlaysHtml = '';
+    overlayKeys.forEach(k => {{
+        const ov = ARG.overlays[k];
+        if (!ov) return;
+        overlaysHtml += `<div class="arg-overlay-section"><h4>${{ov.titre}}</h4><ul class="arg-bullet-list">`;
+        ov.points.forEach(p => {{ overlaysHtml += `<li>${{p}}</li>`; }});
+        overlaysHtml += '</ul></div>';
+    }});
+
+    // Vote context
+    let voteHtml = '';
+    if (voteCtx) {{
+        voteHtml = `<div class="arg-vote-context"><strong>Contexte vote :</strong> ${{voteCtx.text}}</div>`;
+    }}
+
+    return `<div class="card">
+        <div class="arg-card-header">
+            <div>
+                <div class="lot-info">Lot #${{lot.numero}} — ${{(lot.proprietaire || '?').split(',').join(', ')}}</div>
+                <div class="lot-sub">Bât ${{lot.batiment}} · Étage ${{lot.etage}} · ${{lot.localisation || ''}} · ${{lot.tantiemes || 0}} tant. copro${{lot.tantieme_ascenseur > 0 ? ' · ' + lot.tantieme_ascenseur.toFixed(1) + ' tant. asc.' : ''}}${{lot.surface_estimee > 0 ? ' · ~' + lot.surface_estimee + ' m²' : ''}}</div>
+            </div>
+            <button class="btn" onclick="window.print()" style="padding:8px 16px">Imprimer</button>
+        </div>
+        <div class="arg-tags">${{tagsHtml}}</div>
+        ${{finHtml ? '<div class="arg-financial-box">' + finHtml + '</div>' : ''}}
+        <div class="arg-main-text"><div class="arg-title">${{base.titre}}</div>${{base.argument}}</div>
+        ${{overlaysHtml}}
+        ${{voteHtml}}
+    </div>`;
+}}
+
+function renderArgListRow(lot) {{
+    const occClass = lot.occupancy === 'habitant' ? 'arg-tag-habitant' : lot.occupancy === 'bailleur' ? 'arg-tag-bailleur' : 'arg-tag-inconnu';
+    const qp = lot.quote_part_cepa > 0 ? fmtEur(lot.quote_part_cepa) : '-';
+    const tags = `<span class="arg-tag ${{occClass}}" style="font-size:10px">${{lot.occupancy}}</span>` +
+        (lot.est_societe ? ' <span class="arg-tag arg-tag-sci" style="font-size:10px">SCI</span>' : '') +
+        (lot.est_membre_cs ? ' <span class="arg-tag arg-tag-cs" style="font-size:10px">CS</span>' : '');
+    return `<tr data-lotid="${{lot.lot_id}}">
+        <td>#${{lot.numero}}</td><td>${{lot.batiment}}</td><td>${{lot.etage}}</td>
+        <td>${{fmtProp(lot.proprietaire)}}</td>
+        <td>${{tags}}</td>
+        <td><span class="tag tag-${{lot.vote || 'inconnu'}}">${{lot.vote || 'inconnu'}}</span></td>
+        <td>${{qp}}</td>
+    </tr>`;
+}}
+
+function renderArgumentaire() {{
+    const selVal = document.getElementById('arg-proprietaire').value;
+    const cardDiv = document.getElementById('arg-card');
+    const listDiv = document.getElementById('arg-list');
+
+    // Single lot view
+    if (selVal) {{
+        const lot = ARG.lots.find(l => l.lot_id == selVal);
+        if (lot) {{
+            cardDiv.innerHTML = renderArgCard(lot);
+            cardDiv.style.display = 'block';
+            listDiv.style.display = 'none';
+            document.getElementById('arg-counter').textContent = '';
+            return;
+        }}
+    }}
+
+    // List view with filters
+    cardDiv.style.display = 'none';
+    listDiv.style.display = 'block';
+
+    let filtered = ARG.lots;
+    if (argActiveFilters.size > 0) {{
+        filtered = ARG.lots.filter(lot => {{
+            for (const key of argActiveFilters) {{
+                const f = ARG_FILTERS.find(f => f.key === key);
+                if (f && !f.fn(lot)) return false;
+            }}
+            return true;
+        }});
+    }}
+
+    document.getElementById('arg-counter').textContent = `${{filtered.length}} lots correspondants / ${{ARG.lots.length}} total`;
+
+    let html = '<tr><th>Lot</th><th>Bât</th><th>Étage</th><th>Propriétaire</th><th>Profil</th><th>Vote</th><th>Quote-part</th></tr>';
+    filtered.forEach(lot => {{ html += renderArgListRow(lot); }});
+    document.getElementById('arg-list-table').innerHTML = html;
+
+    // Click on row → open card
+    document.querySelectorAll('#arg-list-table tr[data-lotid]').forEach(tr => {{
+        tr.addEventListener('click', () => {{
+            const lotId = tr.dataset.lotid;
+            document.getElementById('arg-proprietaire').value = lotId;
+            renderArgumentaire();
+        }});
+    }});
+}}
+
+document.getElementById('arg-proprietaire').addEventListener('change', () => {{
+    argActiveFilters.clear();
+    document.querySelectorAll('.arg-filter-chip').forEach(c => c.classList.remove('active'));
+    renderArgumentaire();
+}});
+
+document.getElementById('arg-clear').addEventListener('click', () => {{
+    document.getElementById('arg-proprietaire').value = '';
+    argActiveFilters.clear();
+    document.querySelectorAll('.arg-filter-chip').forEach(c => c.classList.remove('active'));
+    renderArgumentaire();
+}});
+
+renderArgumentaire();
 
 // ═══════════════ BUDGET & VALORISATION ═══════════════
 const BV = DATA.budget_valorisation;
