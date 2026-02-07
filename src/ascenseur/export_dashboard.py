@@ -1268,18 +1268,25 @@ function renderVotes() {{
     document.getElementById('vote-filter-count').textContent =
         `${{filtered.length}} lots affichés / ${{totalEligible}} — ${{filteredTantiemes}} tantièmes`;
 
-    // Table — compute quote-part from default simulation (CEPA)
+    // Table — quote-parts synchronisées avec la simulation (même formule, step par défaut)
     const simMontant = DATA.simulations[Object.keys(DATA.simulations)[0]].montant;
-    const simLots = DATA.simulations[Object.keys(DATA.simulations)[0]].lots;
-    const qpMap = {{}};
-    simLots.forEach(sl => {{ qpMap[sl.lot_numero] = sl; }});
+    const voteCoefs = computeCoefs(defaultCoefStep);
+    const voteCalc = recalcTantiemes(baseLots, voteCoefs);
+    const voteQpMap = {{}};
+    baseLots.forEach(l => {{
+        const w = voteCalc.weights[l.lot_numero] || 0;
+        voteQpMap[l.lot_numero] = {{
+            tantAsc: w,
+            qp: voteCalc.totalWeight > 0 ? (w / voteCalc.totalWeight) * simMontant : 0
+        }};
+    }});
 
     let html = '<tr><th>Lot</th><th>Bât</th><th>Étage</th><th>Propriétaire</th><th>Tant.</th><th>Tant. Asc.</th><th>Quote-part</th><th>Vote</th><th>Confiance</th></tr>';
     filtered.forEach(v => {{
         const i = v._idx;
-        const ta = v.tantieme_ascenseur || 0;
-        const sl = qpMap[v.numero];
-        const qp = sl ? simMontant * sl.tantieme_ascenseur / totalTA : 0;
+        const vqp = voteQpMap[v.numero];
+        const ta = vqp ? vqp.tantAsc : 0;
+        const qp = vqp ? vqp.qp : 0;
         html += `<tr>
             <td>#${{v.numero}}</td><td>${{v.batiment}}</td><td>${{v.etage}}</td>
             <td>${{fmtProp(v.proprietaire)}}</td><td>${{v.tantiemes || 0}}</td>
