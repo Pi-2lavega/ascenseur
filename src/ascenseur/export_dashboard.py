@@ -962,17 +962,19 @@ function removePec(idx) {{
 function renderSimulation(montant, coefStep) {{
     if (coefStep === undefined) coefStep = defaultCoefStep;
 
-    // Always recalculate tantièmes from coefficients for consistency
+    // Recalculate tantièmes from coefficients
     const coefs = computeCoefs(coefStep);
-    const {{ weights, totalWeight }} = recalcTantiemes(baseLots, coefs);
+    const {{ weights }} = recalcTantiemes(baseLots, coefs);
     const effectiveTA = weights;
-    const effectiveTotalTA = totalWeight;
 
-    // Base quote-parts
+    // Total tantièmes ascenseur FIXE (valeur légale copropriété)
+    const totalTAFixe = C.tantiemes_ascenseur || 1882.5;
+
+    // Quote-parts = montant × tantième_lot / total_fixe
     const qpBase = {{}};
     baseLots.forEach(l => {{
         const ta = effectiveTA[l.lot_numero] || 0;
-        qpBase[l.lot_numero] = effectiveTotalTA > 0 ? montant * ta / effectiveTotalTA : 0;
+        qpBase[l.lot_numero] = totalTAFixe > 0 ? montant * ta / totalTAFixe : 0;
     }});
 
     // Apply prises en charge : transferts
