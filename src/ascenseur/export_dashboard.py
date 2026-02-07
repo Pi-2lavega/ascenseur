@@ -961,20 +961,12 @@ function removePec(idx) {{
 
 function renderSimulation(montant, coefStep) {{
     if (coefStep === undefined) coefStep = defaultCoefStep;
-    const useCustomCoefs = Math.abs(coefStep - defaultCoefStep) > 0.001;
 
-    // Determine effective tantièmes per lot
-    let effectiveTA = {{}};
-    let effectiveTotalTA = totalTA;
-
-    if (useCustomCoefs) {{
-        const coefs = computeCoefs(coefStep);
-        const {{ weights, totalWeight }} = recalcTantiemes(baseLots, coefs);
-        effectiveTA = weights;
-        effectiveTotalTA = totalWeight;
-    }} else {{
-        baseLots.forEach(l => {{ effectiveTA[l.lot_numero] = l.tantieme_ascenseur; }});
-    }}
+    // Always recalculate tantièmes from coefficients for consistency
+    const coefs = computeCoefs(coefStep);
+    const {{ weights, totalWeight }} = recalcTantiemes(baseLots, coefs);
+    const effectiveTA = weights;
+    const effectiveTotalTA = totalWeight;
 
     // Base quote-parts
     const qpBase = {{}};
