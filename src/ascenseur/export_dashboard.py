@@ -890,10 +890,9 @@ function computeCoefs(step) {{
     return coefs;
 }}
 
-// Default coefficients (step=0.50)
-const defaultCoefs = computeCoefs(defaultCoefStep);
-
 // Recalculate tantièmes ascenseur by scaling original values with coefficient ratio
+// Uses each lot's original coef_ascenseur from DB as baseline (not computed defaults)
+// so that different floors scale differently → quote-parts actually change
 function recalcTantiemes(lots, coefs) {{
     const weights = {{}};
     let totalWeight = 0;
@@ -902,7 +901,7 @@ function recalcTantiemes(lots, coefs) {{
             weights[l.lot_numero] = 0;
             return;
         }}
-        const oldCoef = defaultCoefs[l.etage] || 1;
+        const oldCoef = l.coef_ascenseur || 1;
         const newCoef = coefs[l.etage] !== undefined ? coefs[l.etage] : oldCoef;
         const w = l.tantieme_ascenseur * (newCoef / oldCoef);
         weights[l.lot_numero] = w;
