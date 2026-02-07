@@ -877,11 +877,11 @@ simKeys.forEach(key => {{
 
 const baseKey = simKeys[0];
 const baseLots = DATA.simulations[baseKey].lots;
-// Fallback tantiemes_generaux pour les lots où la valeur est null
+// Tantièmes Imm. A pour les lots sans tantièmes généraux (source: Excel copropriété)
+const TANTIEMES_IMM_A = {{7: 27, 15: 28, 26: 69}};
 baseLots.forEach(l => {{
-    if (!l.tantiemes_generaux && l.tantieme_ascenseur > 0 && l.coef_ascenseur > 0) {{
-        l.tantiemes_generaux = Math.round(l.tantieme_ascenseur / l.coef_ascenseur * 10) / 10;
-        l.tantiemes_gen_estime = true;
+    if (!l.tantiemes_generaux && TANTIEMES_IMM_A[l.lot_numero]) {{
+        l.tantiemes_generaux = TANTIEMES_IMM_A[l.lot_numero];
     }}
 }});
 const payeurs = baseLots.filter(l => l.tantieme_ascenseur > 0);
@@ -1037,7 +1037,7 @@ function renderSimulation(montant, coefStep) {{
             currentEtage = l.etage;
         }}
 
-        const estMark = (l.estime || l.tantiemes_gen_estime) ? ' *' : '';
+        const estMark = l.estime ? ' *' : '';
         const delta = isPayer ? (transferts[l.lot_numero] || 0) : 0;
         let adjCell = '';
         if (hasPec) {{
@@ -1053,7 +1053,7 @@ function renderSimulation(montant, coefStep) {{
         const coefDisplay = displayCoefs[l.etage] !== undefined ? displayCoefs[l.etage].toFixed(2) : l.coef_ascenseur;
         const taDisplay = ta.toFixed(1);
         const tgDisplay = l.tantiemes_generaux ? l.tantiemes_generaux.toFixed(1) : '-';
-        const tgMark = l.tantiemes_gen_estime ? ' *' : '';
+        const tgMark = '';
         const rowStyle = !isPayer ? ' style="color:rgba(255,255,255,0.3)"' : '';
         html += `<tr${{rowStyle}}>
             <td>#${{l.lot_numero}}</td><td>${{l.etage}}</td><td>${{l.localisation}}</td>
