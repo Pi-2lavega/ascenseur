@@ -881,13 +881,11 @@ const payeurs = baseLots.filter(l => l.tantieme_ascenseur > 0);
 const totalTA = baseLots.reduce((s, l) => s + l.tantieme_ascenseur, 0);
 const defaultCoefStep = C.coef_step_defaut || 0.5;
 
-// Compute coefficients: RDC=0, étage e≥1 → 0.5 + e × step
-// Base fixe 0.5 pour que les proportions changent réellement avec le slider
-// À step=0.50 → reproduit les coefs originaux (1.0, 1.5, 2.0, 2.5, 3.0, 3.5)
+// Compute coefficients: RDC=0, étage e≥1 → e × step
 function computeCoefs(step) {{
     const coefs = {{}};
     for (let e = 0; e <= 6; e++) {{
-        coefs[e] = e === 0 ? 0 : 0.5 + e * step;
+        coefs[e] = e * step;
     }}
     return coefs;
 }}
