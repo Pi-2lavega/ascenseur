@@ -881,22 +881,31 @@ const payeurs = baseLots.filter(l => l.tantieme_ascenseur > 0);
 const totalTA = baseLots.reduce((s, l) => s + l.tantieme_ascenseur, 0);
 const defaultCoefStep = C.coef_step_defaut || 0.5;
 
-// Compute coefficients from step: RDC=0, étage n≥1 → 1.0 + (n-1)*step
+// Compute coefficients from step: RDC=0, étage n≥1 → (n+1)*step
+// Reproduit les coefs originaux à step=0.50 : 0, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5
 function computeCoefs(step) {{
     const coefs = {{}};
     for (let e = 0; e <= 6; e++) {{
-        coefs[e] = e === 0 ? 0 : 1.0 + (e - 1) * step;
+        coefs[e] = e === 0 ? 0 : (e + 1) * step;
     }}
     return coefs;
 }}
 
-// Recalculate tantièmes ascenseur from general tantièmes and new coefficients
+// Default coefficients (step=0.50)
+const defaultCoefs = computeCoefs(defaultCoefStep);
+
+// Recalculate tantièmes ascenseur by scaling original values with coefficient ratio
 function recalcTantiemes(lots, coefs) {{
     const weights = {{}};
     let totalWeight = 0;
     lots.forEach(l => {{
-        const c = coefs[l.etage] !== undefined ? coefs[l.etage] : 0;
-        const w = l.etage === 0 ? 0 : (l.tantiemes_generaux || 0) * c;
+        if (l.etage === 0 || l.tantieme_ascenseur <= 0) {{
+            weights[l.lot_numero] = 0;
+            return;
+        }}
+        const oldCoef = defaultCoefs[l.etage] || 1;
+        const newCoef = coefs[l.etage] !== undefined ? coefs[l.etage] : oldCoef;
+        const w = l.tantieme_ascenseur * (newCoef / oldCoef);
         weights[l.lot_numero] = w;
         totalWeight += w;
     }});
