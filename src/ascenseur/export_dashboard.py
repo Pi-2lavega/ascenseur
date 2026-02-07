@@ -329,9 +329,17 @@ tr:hover {{ background: rgba(108,138,255,0.08); }}
 .metric .value {{ font-size: 28px; font-weight: 700; color: #6c8aff; text-shadow: 0 0 20px rgba(108,138,255,0.3); }}
 .metric .label {{ font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 4px; }}
 .metrics-row {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }}
-.progress-bar {{ height: 24px; background: rgba(255,255,255,0.08); border-radius: 12px; overflow: hidden; position: relative; }}
-.progress-fill {{ height: 100%; border-radius: 12px; transition: width 0.5s; }}
-.progress-label {{ position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 12px; font-weight: 600; color: #fff; }}
+.progress-bar {{ height: 28px; background: rgba(255,255,255,0.08); border-radius: 14px; overflow: hidden; position: relative; display: flex; }}
+.progress-fill {{ height: 100%; transition: width 0.5s; }}
+.progress-segment-pour {{ background: linear-gradient(90deg, #6c8aff, #4cd97b); border-radius: 14px 0 0 14px; }}
+.progress-segment-contre {{ background: linear-gradient(90deg, #ff6b6b, #ff4757); }}
+.progress-segment-other {{ background: rgba(255,255,255,0.15); border-radius: 0 14px 14px 0; }}
+.progress-label {{ position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 12px; font-weight: 600; color: #fff; white-space: nowrap; }}
+.progress-legend {{ display: flex; gap: 16px; margin-top: 8px; font-size: 12px; color: rgba(255,255,255,0.7); }}
+.progress-legend span::before {{ content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: middle; }}
+.progress-legend .leg-pour::before {{ background: #4cd97b; }}
+.progress-legend .leg-contre::before {{ background: #ff4757; }}
+.progress-legend .leg-other::before {{ background: rgba(255,255,255,0.25); }}
 .slider-container {{ margin: 16px 0; }}
 .slider-container input[type=range] {{ width: 100%; accent-color: #6c8aff; }}
 .btn {{ display: inline-block; padding: 6px 14px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.85); cursor: pointer; font-size: 12px; margin: 2px; transition: all 0.2s; }}
@@ -525,9 +533,12 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bac
     <div class="card">
         <h2>Progression vers la majorité art.25</h2>
         <div class="progress-bar" id="art25-bar">
-            <div class="progress-fill" style="background: linear-gradient(90deg, #6c8aff, #4cd97b);"></div>
+            <div class="progress-fill progress-segment-pour"></div>
+            <div class="progress-fill progress-segment-contre"></div>
+            <div class="progress-fill progress-segment-other"></div>
             <div class="progress-label"></div>
         </div>
+        <div class="progress-legend" id="art25-legend"></div>
         <div id="art25-seuils" style="margin-top:8px; font-size:12px; color:rgba(255,255,255,0.5)"></div>
     </div>
     <div class="card" id="card-par-bat">
@@ -1173,11 +1184,22 @@ function recalcVotes() {{
         <div class="card metric"><div class="value" style="color:${{art25 ? '#4cd97b' : passerelle ? '#ff9f43' : '#ff6b6b'}}">${{art25 ? 'ART.25 OK' : passerelle ? 'PASSERELLE' : 'INSUFFISANT'}}</div><div class="label">${{manquants > 0 ? 'Manque ' + manquants : 'Majorité atteinte'}}</div></div>
     `;
 
-    // Progress bar
-    const pct = Math.min(100, (tPour / S.majorite) * 100);
+    // Progress bar — 3 segments sur le total
+    const tOther = tAbst + tAbsent + tInconnu;
+    const tTotal = tPour + tContre + tOther;
+    const pctPour = tTotal > 0 ? (tPour / tTotal) * 100 : 0;
+    const pctContre = tTotal > 0 ? (tContre / tTotal) * 100 : 0;
+    const pctOther = tTotal > 0 ? (tOther / tTotal) * 100 : 0;
     const bar = document.getElementById('art25-bar');
-    bar.querySelector('.progress-fill').style.width = pct + '%';
-    bar.querySelector('.progress-label').textContent = `${{tPour}} / ${{S.majorite}} (${{pct.toFixed(0)}}%)`;
+    bar.querySelector('.progress-segment-pour').style.width = pctPour + '%';
+    bar.querySelector('.progress-segment-contre').style.width = pctContre + '%';
+    bar.querySelector('.progress-segment-other').style.width = pctOther + '%';
+    const pctMaj = Math.min(100, (tPour / S.majorite) * 100);
+    bar.querySelector('.progress-label').textContent = `${{tPour}} / ${{S.majorite}} (${{pctMaj.toFixed(0)}}%)`;
+    document.getElementById('art25-legend').innerHTML =
+        `<span class="leg-pour">Pour : ${{tPour}} (${{pctPour.toFixed(0)}}%)</span>` +
+        `<span class="leg-contre">Contre : ${{tContre}} (${{pctContre.toFixed(0)}}%)</span>` +
+        `<span class="leg-other">Abst/Absent/Inconnu : ${{tOther}} (${{pctOther.toFixed(0)}}%)</span>`;
 
     // Dynamic thresholds display
     document.getElementById('art25-seuils').innerHTML =
