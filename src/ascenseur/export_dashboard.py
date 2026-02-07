@@ -891,6 +891,8 @@ simKeys.forEach(key => {{
 
 const baseKey = simKeys[0];
 let currentMontant = DATA.simulations[baseKey].montant;
+// Résultats de la dernière simulation (partagés avec la page Votes)
+let lastSimResult = {{}};
 const baseLots = DATA.simulations[baseKey].lots;
 // Tantièmes Imm. A pour les lots sans tantièmes généraux (source: Excel copropriété)
 const TANTIEMES_IMM_A = {{7: 27, 15: 28, 26: 69}};
@@ -994,6 +996,16 @@ function renderSimulation(montant, coefStep) {{
     baseLots.forEach(l => {{
         const ta = effectiveTA[l.lot_numero] || 0;
         qpBase[l.lot_numero] = totalWeight > 0 ? (ta / totalWeight) * montant : 0;
+    }});
+
+    // Stocker les résultats pour la page Votes
+    lastSimResult = {{}};
+    baseLots.forEach(l => {{
+        lastSimResult[l.lot_numero] = {{
+            tg: l.tantiemes_generaux || 0,
+            ta: effectiveTA[l.lot_numero] || 0,
+            qp: qpBase[l.lot_numero] || 0
+        }};
     }});
 
     // Apply prises en charge : transferts
@@ -1295,31 +1307,17 @@ function renderVotes() {{
     document.getElementById('vote-filter-count').textContent =
         `${{filtered.length}} lots affichés / ${{totalEligible}} — ${{filteredTantiemes}} tantièmes`;
 
-    // Table — quote-parts synchronisées avec la simulation (même montant + même step)
-    const simMontant = currentMontant;
-    const voteCoefs = computeCoefs(defaultCoefStep);
-    const voteCalc = recalcTantiemes(baseLots, voteCoefs);
-    const voteQpMap = {{}};
-    const baseLotTgMap = {{}};
-    baseLots.forEach(l => {{
-        const w = voteCalc.weights[l.lot_numero] || 0;
-        baseLotTgMap[l.lot_numero] = l.tantiemes_generaux || 0;
-        voteQpMap[l.lot_numero] = {{
-            tantAsc: w,
-            tg: l.tantiemes_generaux || 0,
-            qp: voteCalc.totalWeight > 0 ? (w / voteCalc.totalWeight) * simMontant : 0
-        }};
-    }});
-
+    // Table — données directement depuis la dernière simulation
     let html = '<tr><th>Lot</th><th>Bât</th><th>Étage</th><th>Propriétaire</th><th>Tant.</th><th>Tant. Asc.</th><th>Quote-part</th><th>Vote</th><th>Confiance</th></tr>';
     filtered.forEach(v => {{
         const i = v._idx;
-        const vqp = voteQpMap[v.numero];
-        const ta = vqp ? vqp.tantAsc : 0;
-        const qp = vqp ? vqp.qp : 0;
+        const sim = lastSimResult[v.numero];
+        const ta = sim ? sim.ta : 0;
+        const qp = sim ? sim.qp : 0;
+        const tg = sim ? sim.tg : 0;
         html += `<tr>
             <td>#${{v.numero}}</td><td>${{v.batiment}}</td><td>${{v.etage}}</td>
-            <td>${{fmtProp(v.proprietaire)}}</td><td>${{vqp ? (vqp.tg || '-') : (v.tantiemes || 0)}}</td>
+            <td>${{fmtProp(v.proprietaire)}}</td><td>${{tg || '-'}}</td>
             <td>${{ta > 0 ? ta.toFixed(1) : '-'}}</td>
             <td>${{ta > 0 ? fmtEur(qp) : '-'}}</td>
             <td><select class="vote-select" data-idx="${{i}}" data-field="vote">
