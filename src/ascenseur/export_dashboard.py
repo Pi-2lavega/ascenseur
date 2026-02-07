@@ -803,6 +803,9 @@ document.querySelectorAll('.tab').forEach(tab => {{
             renderBudget();
             renderValorisation();
         }}
+        if (tab.dataset.panel === 'votes') {{
+            renderVotes();
+        }}
         if (tab.dataset.panel === 'argumentaire') {{
             renderArgumentaire();
         }}
@@ -887,6 +890,7 @@ simKeys.forEach(key => {{
 }});
 
 const baseKey = simKeys[0];
+let currentMontant = DATA.simulations[baseKey].montant;
 const baseLots = DATA.simulations[baseKey].lots;
 // Tantièmes Imm. A pour les lots sans tantièmes généraux (source: Excel copropriété)
 const TANTIEMES_IMM_A = {{7: 27, 15: 28, 26: 69}};
@@ -978,6 +982,7 @@ function removePec(idx) {{
 
 function renderSimulation(montant, coefStep) {{
     if (coefStep === undefined) coefStep = defaultCoefStep;
+    currentMontant = montant;
 
     // Recalculate tantièmes : tant_asc = tantiemes_generaux × coefficient
     const coefs = computeCoefs(coefStep);
@@ -1290,15 +1295,18 @@ function renderVotes() {{
     document.getElementById('vote-filter-count').textContent =
         `${{filtered.length}} lots affichés / ${{totalEligible}} — ${{filteredTantiemes}} tantièmes`;
 
-    // Table — quote-parts synchronisées avec la simulation (même formule, step par défaut)
-    const simMontant = DATA.simulations[Object.keys(DATA.simulations)[0]].montant;
+    // Table — quote-parts synchronisées avec la simulation (même montant + même step)
+    const simMontant = currentMontant;
     const voteCoefs = computeCoefs(defaultCoefStep);
     const voteCalc = recalcTantiemes(baseLots, voteCoefs);
     const voteQpMap = {{}};
+    const baseLotTgMap = {{}};
     baseLots.forEach(l => {{
         const w = voteCalc.weights[l.lot_numero] || 0;
+        baseLotTgMap[l.lot_numero] = l.tantiemes_generaux || 0;
         voteQpMap[l.lot_numero] = {{
             tantAsc: w,
+            tg: l.tantiemes_generaux || 0,
             qp: voteCalc.totalWeight > 0 ? (w / voteCalc.totalWeight) * simMontant : 0
         }};
     }});
@@ -1311,7 +1319,7 @@ function renderVotes() {{
         const qp = vqp ? vqp.qp : 0;
         html += `<tr>
             <td>#${{v.numero}}</td><td>${{v.batiment}}</td><td>${{v.etage}}</td>
-            <td>${{fmtProp(v.proprietaire)}}</td><td>${{v.tantiemes || 0}}</td>
+            <td>${{fmtProp(v.proprietaire)}}</td><td>${{vqp ? (vqp.tg || '-') : (v.tantiemes || 0)}}</td>
             <td>${{ta > 0 ? ta.toFixed(1) : '-'}}</td>
             <td>${{ta > 0 ? fmtEur(qp) : '-'}}</td>
             <td><select class="vote-select" data-idx="${{i}}" data-field="vote">
