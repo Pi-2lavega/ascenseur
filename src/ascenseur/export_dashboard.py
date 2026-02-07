@@ -888,28 +888,28 @@ const payeurs = baseLots.filter(l => l.tantieme_ascenseur > 0);
 const totalTA = baseLots.reduce((s, l) => s + l.tantieme_ascenseur, 0);
 const defaultCoefStep = C.coef_step_defaut || 0.5;
 
-// Compute coefficients: RDC=0, étage e≥1 → 1 + (e-1) × step
-// step=0.50 (défaut) reproduit les coefs originaux (1->1.0, 2->1.5, ..., 6->3.5)
+// Compute coefficients: RDC=0, étage e≥1 → e × step
 function computeCoefs(step) {{
     const coefs = {{}};
     for (let e = 0; e <= 6; e++) {{
-        coefs[e] = e === 0 ? 0 : 1 + (e - 1) * step;
+        coefs[e] = e * step;
     }}
     return coefs;
 }}
 
-// Recalculate tantièmes ascenseur : tant_asc = tantiemes_generaux × coefficient
+// Recalculate tantièmes ascenseur : pondération = tg × (1 + coef)
+// La base tg assure que les proportions changent avec le slider
 function recalcTantiemes(lots, coefs) {{
     const weights = {{}};
     let totalWeight = 0;
     lots.forEach(l => {{
         const tg = l.tantiemes_generaux || 0;
         const coef = coefs[l.etage] !== undefined ? coefs[l.etage] : 0;
-        if (l.etage === 0 || tg <= 0 || coef <= 0) {{
+        if (l.etage === 0 || tg <= 0) {{
             weights[l.lot_numero] = 0;
             return;
         }}
-        const w = tg * coef;
+        const w = tg * (1 + coef);
         weights[l.lot_numero] = w;
         totalWeight += w;
     }});
