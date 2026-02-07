@@ -279,6 +279,7 @@ def generate_dashboard_data(conn: sqlite3.Connection) -> dict:
             "majorite_art25": MAJORITE_ART25,
             "seuil_passerelle": SEUIL_PASSERELLE,
             "tantiemes_ascenseur": TANTIEMES_ASCENSEUR_TOTAL,
+            "coef_step_defaut": 0.5,
         },
     }
 
@@ -472,6 +473,14 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bac
             <input type="range" id="montant-slider" min="150000" max="200000" step="100" value="181123">
         </div>
         <div style="margin-bottom:12px" id="montant-buttons"></div>
+        <div class="slider-container" style="margin-top:16px">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px">
+                <label>Incrément coefficient par étage : <strong id="coef-label">0.50</strong></label>
+                <button class="btn" id="coef-reset" style="font-size:11px; padding:3px 10px">Réinitialiser</button>
+            </div>
+            <input type="range" id="coef-slider" min="0.05" max="0.50" step="0.01" value="0.50">
+            <div id="coef-badges" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px"></div>
+        </div>
         <div class="highlight-box" id="lot27-box" style="display:none"></div>
         <div style="overflow-x:auto">
             <table id="sim-table"></table>
@@ -870,6 +879,44 @@ const baseKey = simKeys[0];
 const baseLots = DATA.simulations[baseKey].lots;
 const payeurs = baseLots.filter(l => l.tantieme_ascenseur > 0);
 const totalTA = baseLots.reduce((s, l) => s + l.tantieme_ascenseur, 0);
+const defaultCoefStep = C.coef_step_defaut || 0.5;
+
+// Compute coefficients from step: RDC=0, étage n≥1 → 1.0 + (n-1)*step
+function computeCoefs(step) {{
+    const coefs = {{}};
+    for (let e = 0; e <= 6; e++) {{
+        coefs[e] = e === 0 ? 0 : 1.0 + (e - 1) * step;
+    }}
+    return coefs;
+}}
+
+// Recalculate tantièmes ascenseur from general tantièmes and new coefficients
+function recalcTantiemes(lots, coefs) {{
+    const weights = {{}};
+    let totalWeight = 0;
+    lots.forEach(l => {{
+        const c = coefs[l.etage] !== undefined ? coefs[l.etage] : 0;
+        const w = l.etage === 0 ? 0 : (l.tantiemes_generaux || 0) * c;
+        weights[l.lot_numero] = w;
+        totalWeight += w;
+    }});
+    return {{ weights, totalWeight }};
+}}
+
+// Render coefficient badges
+function renderCoefBadges(step) {{
+    const coefs = computeCoefs(step);
+    const etageNames = ['RDC', '1er', '2e', '3e', '4e', '5e', '6e'];
+    let html = '';
+    etageNames.forEach((name, i) => {{
+        const val = coefs[i].toFixed(2);
+        const bgColor = i === 0 ? 'rgba(255,255,255,0.08)' : 'rgba(108,138,255,0.15)';
+        const borderColor = i === 0 ? 'rgba(255,255,255,0.15)' : 'rgba(108,138,255,0.4)';
+        const textColor = i === 0 ? 'rgba(255,255,255,0.5)' : '#6c8aff';
+        html += `<span style="display:inline-block; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600; background:${{bgColor}}; border:1px solid ${{borderColor}}; color:${{textColor}}">${{name}}: ${{val}}</span>`;
+    }});
+    document.getElementById('coef-badges').innerHTML = html;
+}}
 
 // Prises en charge : [{{ payeur: lot_numero, beneficiaire: lot_numero, pct: 0-100 }}]
 let prisesEnCharge = [];
@@ -897,24 +944,41 @@ document.getElementById('pec-add').addEventListener('click', () => {{
     const existPct = prisesEnCharge.filter(p => p.beneficiaire === benef).reduce((s, p) => s + p.pct, 0);
     if (existPct + pct > 100) return;
     prisesEnCharge.push({{ payeur, beneficiaire: benef, pct }});
-    renderSimulation(+document.getElementById('montant-slider').value);
+    renderSimulation(+document.getElementById('montant-slider').value, +document.getElementById('coef-slider').value);
 }});
 
 function removePec(idx) {{
     prisesEnCharge.splice(idx, 1);
-    renderSimulation(+document.getElementById('montant-slider').value);
+    renderSimulation(+document.getElementById('montant-slider').value, +document.getElementById('coef-slider').value);
 }}
 
-function renderSimulation(montant) {{
+function renderSimulation(montant, coefStep) {{
+    if (coefStep === undefined) coefStep = defaultCoefStep;
+    const useCustomCoefs = Math.abs(coefStep - defaultCoefStep) > 0.001;
+
+    // Determine effective tantièmes per lot
+    let effectiveTA = {{}};
+    let effectiveTotalTA = totalTA;
+
+    if (useCustomCoefs) {{
+        const coefs = computeCoefs(coefStep);
+        const {{ weights, totalWeight }} = recalcTantiemes(baseLots, coefs);
+        effectiveTA = weights;
+        effectiveTotalTA = totalWeight;
+    }} else {{
+        baseLots.forEach(l => {{ effectiveTA[l.lot_numero] = l.tantieme_ascenseur; }});
+    }}
+
     // Base quote-parts
     const qpBase = {{}};
-    payeurs.forEach(l => {{
-        qpBase[l.lot_numero] = totalTA > 0 ? montant * l.tantieme_ascenseur / totalTA : 0;
+    baseLots.forEach(l => {{
+        const ta = effectiveTA[l.lot_numero] || 0;
+        qpBase[l.lot_numero] = effectiveTotalTA > 0 ? montant * ta / effectiveTotalTA : 0;
     }});
 
     // Apply prises en charge : transferts
     const transferts = {{}};  // lot_numero -> adjustment (+/-)
-    payeurs.forEach(l => {{ transferts[l.lot_numero] = 0; }});
+    baseLots.forEach(l => {{ transferts[l.lot_numero] = 0; }});
 
     prisesEnCharge.forEach(p => {{
         const montantTransfert = qpBase[p.beneficiaire] * p.pct / 100;
@@ -942,6 +1006,9 @@ function renderSimulation(montant) {{
     }}
     document.getElementById('pec-list').innerHTML = pecHtml;
 
+    // Compute display coefficients
+    const displayCoefs = computeCoefs(coefStep);
+
     // Render main table
     const hasPec = prisesEnCharge.length > 0;
     let html = '<tr><th>Lot</th><th>Étage</th><th>Localisation</th><th>Propriétaire</th><th>Coef.</th><th>Tant. Asc.</th><th>Quote-part</th>';
@@ -954,7 +1021,8 @@ function renderSimulation(montant) {{
     let currentEtage = null;
 
     baseLots.forEach(l => {{
-        const isPayer = l.tantieme_ascenseur > 0;
+        const ta = effectiveTA[l.lot_numero] || 0;
+        const isPayer = ta > 0;
         const qp = qpBase[l.lot_numero] || 0;
         const adj = isPayer ? qp + (transferts[l.lot_numero] || 0) : 0;
         totalQP += qp;
@@ -978,11 +1046,13 @@ function renderSimulation(montant) {{
             }}
         }}
 
+        const coefDisplay = displayCoefs[l.etage] !== undefined ? displayCoefs[l.etage].toFixed(2) : l.coef_ascenseur;
+        const taDisplay = ta.toFixed(1);
         const rowStyle = !isPayer ? ' style="color:rgba(255,255,255,0.3)"' : '';
         html += `<tr${{rowStyle}}>
             <td>#${{l.lot_numero}}</td><td>${{l.etage}}</td><td>${{l.localisation}}</td>
-            <td>${{fmtProp(l.proprietaire)}}</td><td>${{l.coef_ascenseur}}</td>
-            <td>${{l.tantieme_ascenseur.toFixed(1)}}${{estMark}}</td>
+            <td>${{fmtProp(l.proprietaire)}}</td><td>${{coefDisplay}}</td>
+            <td>${{taDisplay}}${{estMark}}</td>
             <td>${{isPayer ? '<strong>' + fmtEur(qp) + '</strong>' : '-'}}</td>
             ${{adjCell}}
         </tr>`;
@@ -1001,19 +1071,32 @@ function renderSimulation(montant) {{
     }}
     lot27Html += ` pour un montant de ${{fmtEur(montant)}}`;
     document.getElementById('lot27-box').innerHTML = lot27Html;
+
+    // Update coef UI
+    document.getElementById('coef-label').textContent = coefStep.toFixed(2);
+    renderCoefBadges(coefStep);
 }}
 
-document.getElementById('montant-slider').addEventListener('input', e => renderSimulation(+e.target.value));
+document.getElementById('montant-slider').addEventListener('input', e => {{
+    renderSimulation(+e.target.value, +document.getElementById('coef-slider').value);
+}});
+document.getElementById('coef-slider').addEventListener('input', e => {{
+    renderSimulation(+document.getElementById('montant-slider').value, +e.target.value);
+}});
+document.getElementById('coef-reset').addEventListener('click', () => {{
+    document.getElementById('coef-slider').value = defaultCoefStep;
+    renderSimulation(+document.getElementById('montant-slider').value, defaultCoefStep);
+}});
 document.querySelectorAll('[data-montant]').forEach(btn => {{
     btn.addEventListener('click', () => {{
         const val = +btn.dataset.montant;
         document.getElementById('montant-slider').value = val;
-        renderSimulation(val);
+        renderSimulation(val, +document.getElementById('coef-slider').value);
         document.querySelectorAll('[data-montant]').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
     }});
 }});
-renderSimulation(DATA.simulations[simKeys[0]].montant);
+renderSimulation(DATA.simulations[simKeys[0]].montant, defaultCoefStep);
 
 // ═══════════════ VOTES ═══════════════
 let votesState = JSON.parse(JSON.stringify(DATA.votes.detail));
