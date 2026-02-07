@@ -478,7 +478,7 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bac
                 <label>Incrément coefficient par étage : <strong id="coef-label">0.50</strong></label>
                 <button class="btn" id="coef-reset" style="font-size:11px; padding:3px 10px">Réinitialiser</button>
             </div>
-            <input type="range" id="coef-slider" min="0.05" max="0.50" step="0.01" value="0.50">
+            <input type="range" id="coef-slider" min="0.00" max="1.00" step="0.01" value="0.50">
             <div id="coef-badges" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px"></div>
         </div>
         <div class="highlight-box" id="lot27-box" style="display:none"></div>
@@ -877,33 +877,39 @@ simKeys.forEach(key => {{
 
 const baseKey = simKeys[0];
 const baseLots = DATA.simulations[baseKey].lots;
+// Fallback tantiemes_generaux pour les lots où la valeur est null
+baseLots.forEach(l => {{
+    if (!l.tantiemes_generaux && l.tantieme_ascenseur > 0 && l.coef_ascenseur > 0) {{
+        l.tantiemes_generaux = Math.round(l.tantieme_ascenseur / l.coef_ascenseur * 10) / 10;
+        l.tantiemes_gen_estime = true;
+    }}
+}});
 const payeurs = baseLots.filter(l => l.tantieme_ascenseur > 0);
 const totalTA = baseLots.reduce((s, l) => s + l.tantieme_ascenseur, 0);
 const defaultCoefStep = C.coef_step_defaut || 0.5;
 
-// Compute coefficients: RDC=0, étage e≥1 → e × step
+// Compute coefficients: RDC=0, étage e≥1 → 1 + (e-1) × step
+// step=0.50 (défaut) reproduit les coefs originaux (1->1.0, 2->1.5, ..., 6->3.5)
 function computeCoefs(step) {{
     const coefs = {{}};
     for (let e = 0; e <= 6; e++) {{
-        coefs[e] = e * step;
+        coefs[e] = e === 0 ? 0 : 1 + (e - 1) * step;
     }}
     return coefs;
 }}
 
-// Recalculate tantièmes ascenseur by scaling original values with coefficient ratio
-// Uses each lot's original coef_ascenseur from DB as baseline (not computed defaults)
-// so that different floors scale differently → quote-parts actually change
+// Recalculate tantièmes ascenseur : tant_asc = tantiemes_generaux × coefficient
 function recalcTantiemes(lots, coefs) {{
     const weights = {{}};
     let totalWeight = 0;
     lots.forEach(l => {{
-        if (l.etage === 0 || l.tantieme_ascenseur <= 0) {{
+        const tg = l.tantiemes_generaux || 0;
+        const coef = coefs[l.etage] !== undefined ? coefs[l.etage] : 0;
+        if (l.etage === 0 || tg <= 0 || coef <= 0) {{
             weights[l.lot_numero] = 0;
             return;
         }}
-        const oldCoef = l.coef_ascenseur || 1;
-        const newCoef = coefs[l.etage] !== undefined ? coefs[l.etage] : oldCoef;
-        const w = l.tantieme_ascenseur * (newCoef / oldCoef);
+        const w = tg * coef;
         weights[l.lot_numero] = w;
         totalWeight += w;
     }});
@@ -962,19 +968,16 @@ function removePec(idx) {{
 function renderSimulation(montant, coefStep) {{
     if (coefStep === undefined) coefStep = defaultCoefStep;
 
-    // Recalculate tantièmes from coefficients
+    // Recalculate tantièmes : tant_asc = tantiemes_generaux × coefficient
     const coefs = computeCoefs(coefStep);
-    const {{ weights }} = recalcTantiemes(baseLots, coefs);
+    const {{ weights, totalWeight }} = recalcTantiemes(baseLots, coefs);
     const effectiveTA = weights;
 
-    // Total tantièmes ascenseur FIXE (valeur légale copropriété)
-    const totalTAFixe = C.tantiemes_ascenseur || 1882.5;
-
-    // Quote-parts = montant × tantième_lot / total_fixe
+    // Quote-parts = (tant_asc_lot / Σ tant_asc) × montant
     const qpBase = {{}};
     baseLots.forEach(l => {{
         const ta = effectiveTA[l.lot_numero] || 0;
-        qpBase[l.lot_numero] = totalTAFixe > 0 ? montant * ta / totalTAFixe : 0;
+        qpBase[l.lot_numero] = totalWeight > 0 ? (ta / totalWeight) * montant : 0;
     }});
 
     // Apply prises en charge : transferts
@@ -1012,7 +1015,7 @@ function renderSimulation(montant, coefStep) {{
 
     // Render main table
     const hasPec = prisesEnCharge.length > 0;
-    let html = '<tr><th>Lot</th><th>Étage</th><th>Localisation</th><th>Propriétaire</th><th>Coef.</th><th>Tant. Asc.</th><th>Quote-part</th>';
+    let html = '<tr><th>Lot</th><th>Étage</th><th>Localisation</th><th>Propriétaire</th><th>Tantièmes</th><th>Coef.</th><th>Tant. Asc.</th><th>Quote-part</th>';
     if (hasPec) html += '<th>Coût ajusté</th>';
     html += '</tr>';
 
@@ -1030,11 +1033,11 @@ function renderSimulation(montant, coefStep) {{
         if (l.lot_numero === 27) {{ lot27QP = qp; lot27Adj = adj; }}
 
         if (l.etage !== currentEtage) {{
-            if (currentEtage !== null) html += `<tr><td colspan="${{hasPec ? 8 : 7}}" style="height:4px; background:rgba(255,255,255,0.08)"></td></tr>`;
+            if (currentEtage !== null) html += `<tr><td colspan="${{hasPec ? 9 : 8}}" style="height:4px; background:rgba(255,255,255,0.08)"></td></tr>`;
             currentEtage = l.etage;
         }}
 
-        const estMark = l.estime ? ' *' : '';
+        const estMark = (l.estime || l.tantiemes_gen_estime) ? ' *' : '';
         const delta = isPayer ? (transferts[l.lot_numero] || 0) : 0;
         let adjCell = '';
         if (hasPec) {{
@@ -1049,17 +1052,19 @@ function renderSimulation(montant, coefStep) {{
 
         const coefDisplay = displayCoefs[l.etage] !== undefined ? displayCoefs[l.etage].toFixed(2) : l.coef_ascenseur;
         const taDisplay = ta.toFixed(1);
+        const tgDisplay = l.tantiemes_generaux ? l.tantiemes_generaux.toFixed(1) : '-';
+        const tgMark = l.tantiemes_gen_estime ? ' *' : '';
         const rowStyle = !isPayer ? ' style="color:rgba(255,255,255,0.3)"' : '';
         html += `<tr${{rowStyle}}>
             <td>#${{l.lot_numero}}</td><td>${{l.etage}}</td><td>${{l.localisation}}</td>
-            <td>${{fmtProp(l.proprietaire)}}</td><td>${{coefDisplay}}</td>
+            <td>${{fmtProp(l.proprietaire)}}</td><td>${{tgDisplay}}${{tgMark}}</td><td>${{coefDisplay}}</td>
             <td>${{taDisplay}}${{estMark}}</td>
             <td>${{isPayer ? '<strong>' + fmtEur(qp) + '</strong>' : '-'}}</td>
             ${{adjCell}}
         </tr>`;
     }});
 
-    html += `<tr style="background:rgba(255,159,67,0.1); font-weight:bold"><td colspan="6" style="text-align:right">TOTAL</td><td>${{fmtEur(totalQP)}}</td>`;
+    html += `<tr style="background:rgba(255,159,67,0.1); font-weight:bold"><td colspan="7" style="text-align:right">TOTAL</td><td>${{fmtEur(totalQP)}}</td>`;
     if (hasPec) html += `<td>${{fmtEur(totalQP)}}</td>`;
     html += '</tr>';
 
