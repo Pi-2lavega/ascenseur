@@ -888,7 +888,7 @@ let currentMontant = DATA.simulations[baseKey].montant;
 let lastSimResult = {{}};
 const baseLots = DATA.simulations[baseKey].lots;
 // Tantièmes Imm. A pour les lots sans tantièmes généraux (source: Excel copropriété)
-const TANTIEMES_IMM_A = {{7: 27, 15: 28, 26: 69}};
+const TANTIEMES_IMM_A = {{15: 28}};
 baseLots.forEach(l => {{
     if (!l.tantiemes_generaux && TANTIEMES_IMM_A[l.lot_numero]) {{
         l.tantiemes_generaux = TANTIEMES_IMM_A[l.lot_numero];
