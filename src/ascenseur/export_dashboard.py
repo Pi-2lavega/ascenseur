@@ -522,12 +522,9 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bac
 <!-- ═══════════════ VOTES ═══════════════ -->
 <div class="panel" id="panel-votes">
     <div class="card" style="margin-bottom:16px">
-        <h2>Scénario juridique de vote</h2>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px">
-            <button class="btn scenario-btn active" data-scenario="bat_a" style="padding:10px 18px; font-size:13px">Parties communes spéciales (Bât A seul)</button>
-            <button class="btn scenario-btn" data-scenario="tous" style="padding:10px 18px; font-size:13px">AG générale (tous bâtiments)</button>
-        </div>
-        <div id="scenario-desc"></div>
+        <h2>Votes — Bâtiment A</h2>
+        <div class="highlight-box"><strong>Parties communes spéciales — Bâtiment A</strong><br>
+            Seuls les copropriétaires du <strong>bâtiment A</strong> votent, sur la base de leurs tantièmes propres.</div>
     </div>
     <div class="metrics-row" id="vote-metrics"></div>
     <div class="card">
@@ -540,10 +537,6 @@ select.vote-select {{ padding: 2px 6px; border-radius: 4px; font-size: 12px; bac
         </div>
         <div class="progress-legend" id="art25-legend"></div>
         <div id="art25-seuils" style="margin-top:8px; font-size:12px; color:rgba(255,255,255,0.5)"></div>
-    </div>
-    <div class="card" id="card-par-bat">
-        <h2>Par bâtiment</h2>
-        <div class="chart-container" style="max-width:500px"><canvas id="vote-bat-chart"></canvas></div>
     </div>
     <div class="card">
         <h2>Détail des votes</h2>
@@ -1134,43 +1127,16 @@ renderSimulation(DATA.simulations[simKeys[0]].montant, defaultCoefStep);
 
 // ═══════════════ VOTES ═══════════════
 let votesState = JSON.parse(JSON.stringify(DATA.votes.detail));
-let currentScenario = 'bat_a';
 
 function getScenarioParams() {{
-    if (currentScenario === 'bat_a') {{
-        const total = C.tantiemes_bat_a;
-        return {{
-            total,
-            majorite: Math.floor(total / 2) + 1,
-            passerelle: Math.ceil(total / 3),
-            filterBat: 'A',
-            label: 'Bât A seul',
-        }};
-    }} else {{
-        return {{
-            total: C.tantiemes_total,
-            majorite: C.majorite_art25,
-            passerelle: C.seuil_passerelle,
-            filterBat: null,
-            label: 'Tous bâtiments',
-        }};
-    }}
-}}
-
-function renderScenarioDesc() {{
-    const el = document.getElementById('scenario-desc');
-    if (currentScenario === 'bat_a') {{
-        el.innerHTML = `<div class="highlight-box"><strong>Scénario 1 — Parties communes spéciales par bâtiment</strong><br>
-            Le règlement prévoit des parties communes spéciales pour chaque bâtiment.
-            Seuls les copropriétaires du <strong>bâtiment A</strong> votent, sur la base de leurs tantièmes propres
-            (${{C.tantiemes_bat_a.toLocaleString('fr-FR')}} tantièmes). Les copropriétaires de B et C ne participent pas.</div>`;
-    }} else {{
-        el.innerHTML = `<div class="highlight-box" style="background:rgba(255,107,107,0.08); border-left-color:#ff6b6b"><strong>Scénario 2 — AG générale (pas de parties communes spéciales)</strong><br>
-            Le règlement ne prévoit ni parties communes spéciales ni syndicat secondaire.
-            <strong>Tous les copropriétaires (A, B et C)</strong> doivent voter en AG
-            (${{C.tantiemes_total.toLocaleString('fr-FR')}} tantièmes).
-            <em>Attention : les copropriétaires de B et C peuvent bloquer un projet qui ne les concerne pas.</em></div>`;
-    }}
+    const total = C.tantiemes_bat_a;
+    return {{
+        total,
+        majorite: Math.floor(total / 2) + 1,
+        passerelle: Math.ceil(total / 3),
+        filterBat: 'A',
+        label: 'Bât A',
+    }};
 }}
 
 function recalcVotes() {{
@@ -1231,36 +1197,6 @@ function recalcVotes() {{
 function renderVotes() {{
     const stats = recalcVotes();
     const S = getScenarioParams();
-
-    // Chart by building — hide if bat_a only
-    const cardBat = document.getElementById('card-par-bat');
-    if (S.filterBat) {{
-        cardBat.style.display = 'none';
-    }} else {{
-        cardBat.style.display = '';
-        const batData = {{}};
-        votesState.forEach(v => {{
-            if (!batData[v.batiment]) batData[v.batiment] = {{ pour: 0, contre: 0, autre: 0 }};
-            if (v.vote === 'pour') batData[v.batiment].pour += (v.tantiemes || 0);
-            else if (v.vote === 'contre') batData[v.batiment].contre += (v.tantiemes || 0);
-            else batData[v.batiment].autre += (v.tantiemes || 0);
-        }});
-        const chartEl = document.getElementById('vote-bat-chart');
-        if (window._voteBatChart) window._voteBatChart.destroy();
-        const bats = Object.keys(batData).sort();
-        window._voteBatChart = new Chart(chartEl, {{
-            type: 'bar',
-            data: {{
-                labels: bats.map(b => 'Bât ' + b),
-                datasets: [
-                    {{ label: 'Pour', data: bats.map(b => batData[b].pour), backgroundColor: '#4cd97b' }},
-                    {{ label: 'Contre', data: bats.map(b => batData[b].contre), backgroundColor: '#ff6b6b' }},
-                    {{ label: 'Autre', data: bats.map(b => batData[b].autre), backgroundColor: 'rgba(255,255,255,0.15)' }},
-                ]
-            }},
-            options: {{ responsive: true, plugins: {{ legend: {{ position: 'bottom' }} }}, scales: {{ x: {{ stacked: true }}, y: {{ stacked: true }} }} }}
-        }});
-    }}
 
     // Apply filters — start from eligible lots only
     const filterBat = document.getElementById('vote-filter-bat').value;
@@ -1363,18 +1299,6 @@ function renderVotes() {{
         }});
     }});
 }}
-
-// Scenario buttons
-document.querySelectorAll('.scenario-btn').forEach(btn => {{
-    btn.addEventListener('click', () => {{
-        document.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentScenario = btn.dataset.scenario;
-        renderScenarioDesc();
-        renderVotes();
-    }});
-}});
-renderScenarioDesc();
 
 // Filter/sort event handlers
 ['vote-filter-bat', 'vote-filter-vote', 'vote-filter-confiance', 'vote-sort1', 'vote-sort2'].forEach(id => {{
