@@ -887,13 +887,6 @@ let currentMontant = DATA.simulations[baseKey].montant;
 // Résultats de la dernière simulation (partagés avec la page Votes)
 let lastSimResult = {{}};
 const baseLots = DATA.simulations[baseKey].lots;
-// Tantièmes Imm. A pour les lots sans tantièmes généraux (source: Excel copropriété)
-const TANTIEMES_IMM_A = {{15: 28}};
-baseLots.forEach(l => {{
-    if (!l.tantiemes_generaux && TANTIEMES_IMM_A[l.lot_numero]) {{
-        l.tantiemes_generaux = TANTIEMES_IMM_A[l.lot_numero];
-    }}
-}});
 const payeurs = baseLots.filter(l => l.tantieme_ascenseur > 0);
 const totalTA = baseLots.reduce((s, l) => s + l.tantieme_ascenseur, 0);
 const defaultCoefStep = C.coef_step_defaut || 0.5;
